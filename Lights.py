@@ -4,7 +4,7 @@ from neopixel import NeoPixel
 
 class Lights:
     def __init__(self):
-        self.num_lights = 50
+        self.num_lights = 500
         self.pixels = NeoPixel(board.D21, self.num_lights, auto_write=False)
         self.set_all(0, 0, 0)
 

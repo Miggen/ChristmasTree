@@ -17,7 +17,7 @@ def xmaslight():
     # import sys
     #set up the pixels (AKA 'LEDs')
 
-    PIXEL_COUNT = 50 # this should be 500
+    PIXEL_COUNT = 500 # this should be 500
     
     pixels = neopixel.NeoPixel(board.D21, PIXEL_COUNT, auto_write=False)
     pixels.fill((0, 0, 0))
@@ -34,7 +34,6 @@ def xmaslight():
         pixels.show()
         sleep(2)
         i += 1
-        print('Done')
 
 # yes, I just put this at the bottom so it auto runs
 xmaslight()
