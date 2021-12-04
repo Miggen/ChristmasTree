@@ -21,7 +21,7 @@ class Camera:
         cv2.destroyAllWindows()
 
     def get(self):
-        for _ in range(0, 5):
+        for _ in range(0, 6):
             status, frame = self.stream.read()
         if self.visualize:
             cv2.imshow(self._image_name, frame)
