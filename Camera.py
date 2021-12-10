@@ -6,8 +6,7 @@ class Camera:
     def __init__(self, visualize):
         self._image_name = "preview"
         self.visualize = visualize
-        if visualize:
-            cv2.namedWindow(self._image_name)
+        cv2.namedWindow(self._image_name)
         self.stream = cv2.VideoCapture(0)
         if self.stream.isOpened():
             status, frame = self.stream.read()
