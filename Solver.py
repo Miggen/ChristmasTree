@@ -14,6 +14,10 @@ import pdb
 
 PI = 3.1415
 
+focal_length_x = 645.0
+focal_length_y = 634.0
+center_x = 320.0
+center_y = 240.0
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Estimate the 3D positions of the Camera and Lights using samples from Calibration.py.')
@@ -110,7 +114,7 @@ def crcs_to_tsc(to_tcs_R, to_tsc_t, crcs):
 
 
 def get_cam_offset(cam_idx):
-    offset = 4
+    offset = 0
     if cam_idx > 0:
         offset += 3 +  (6 * (cam_idx - 1))
     return offset
@@ -118,8 +122,6 @@ def get_cam_offset(cam_idx):
 
 # sum (x + fx * vcrc / ucrc - cx)^2 + sum (y + fy * zcrc / ucrc - cy)^2
 def loss_function(x, samples, first_light_idx):
-    fx, fy, cx, cy = x[0:4]
-
     loss = 0.0
     prev_cam_idx = -1
     for light_idx, cam_idx, px in samples:
@@ -142,9 +144,9 @@ def loss_function(x, samples, first_light_idx):
         else:
             tsc = np.array([0.0, 0.0, 0.0])
         crcs = tsc_to_crcs(to_crcs_R, to_tsc_t, tsc)
-        loss += (px[0] + ((fx * crcs[1]) / crcs[0]) - cx)**2
-        loss += (px[1] + ((fy * crcs[2]) / crcs[0]) - cy)**2
-    print(f'{loss} {fx} {fy} {cx} {cy}')
+        loss += (px[0] + ((focal_length_x * crcs[1]) / crcs[0]) - center_x)**2
+        loss += (px[1] + ((focal_length_y * crcs[2]) / crcs[0]) - center_y)**2
+    print(f'{loss}')
     #visualize_state(x, first_light_idx)
     return loss
 
@@ -152,15 +154,14 @@ def loss_function(x, samples, first_light_idx):
 # g = sum (x + fx * vcrc / ucrc - cx)^2 + sum (y + fy * zcrc / ucrc - cy)^2
 # g = h^2 + p^2, dg/da = 2 * h * dh/da + 2 * p * dp/da
 def loss_jacobian(x, samples, first_light_idx):
-    def jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p):
+    def jac_from_dcrcs(dcrcs, crcs, h, p):
         dcrcsxinv = dcrcs[0] / (crcs[0]**2)
         dcrcsy_crcsxinv = dcrcs[1] / crcs[0] + crcs[1] * dcrcsxinv
         dcrcsz_crcsxinv = dcrcs[2] / crcs[0] + crcs[2] * dcrcsxinv
-        dh = fx * dcrcsy_crcsxinv
-        dp = fy * dcrcsz_crcsxinv
+        dh = focal_length_x * dcrcsy_crcsxinv
+        dp = focal_length_y * dcrcsz_crcsxinv
         return  2.0 * h * dh + 2.0 * p * dp
 
-    fx, fy, cx, cy = x[0:4]
     jac = np.zeros(len(x))
     jac_num_samples = np.ones(len(x))
     prev_cam_idx = -1
@@ -190,70 +191,54 @@ def loss_jacobian(x, samples, first_light_idx):
 
         crcs = tsc_to_crcs(to_crcs_R, to_tsc_t, tsc)
 
-        h = px[0] + ((fx * crcs[1]) / crcs[0]) - cx
-        p = px[1] + ((fy * crcs[2]) / crcs[0]) - cy
-
-        # dfx
-        jac[0] += 2 * h * crcs[1] / crcs[0]
-        jac_num_samples[0] += 1.0
-
-        # dfy
-        jac[1] += 2 * p * crcs[2] / crcs[0]
-        jac_num_samples[1] += 1.0
-
-        # dcx
-        jac[2] += -2 * h
-        jac_num_samples[2] += 1.0
-
-        # dcy
-        jac[3] += -2 * p
-        jac_num_samples[3] += 1.0
+        h = px[0] + ((focal_length_x * crcs[1]) / crcs[0]) - center_x
+        p = px[1] + ((focal_length_y * crcs[2]) / crcs[0]) - center_y
 
         # dcamu
         dcrcs = -to_crcs_R[:, 0]
-        jac[cam_offset] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+        jac[cam_offset] += jac_from_dcrcs(dcrcs, crcs, h, p)
         jac_num_samples[cam_offset] += 1.0
 
         # dcamv
         dcrcs = -to_crcs_R[:, 1]
-        jac[cam_offset + 1] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+        jac[cam_offset + 1] += jac_from_dcrcs(dcrcs, crcs, h, p)
         jac_num_samples[cam_offset + 1] += 1.0
 
         # dcamz
         dcrcs = -to_crcs_R[:, 2]
-        jac[cam_offset + 2] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+        jac[cam_offset + 2] += jac_from_dcrcs(dcrcs, crcs, h, p)
         jac_num_samples[cam_offset + 2] += 1.0
 
         if cam_idx > 0:
             # dcamr
             dcrcs = dcrcsRdroll @ (tsc - to_tsc_t)
-            jac[cam_offset + 3] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac[cam_offset + 3] += jac_from_dcrcs(dcrcs, crcs, h, p)
             jac_num_samples[cam_offset + 3] += 1.0
 
             # dcamp
             dcrcs = dcrcsRdpitch @ (tsc - to_tsc_t)
-            jac[cam_offset + 4] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac[cam_offset + 4] += jac_from_dcrcs(dcrcs, crcs, h, p)
             jac_num_samples[cam_offset + 4] += 1.0
 
             # dcamy
             dcrcs = dcrcsRdyaw @ (tsc - to_tsc_t)
-            jac[cam_offset + 5] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac[cam_offset + 5] += jac_from_dcrcs(dcrcs, crcs, h, p)
             jac_num_samples[cam_offset + 5] += 1.0
 
         if light_idx < (Lights.NUM_LIGHTS - 1):
             # dru
             dcrcs = to_crcs_R[:, 0]
-            jac[light_offset] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac[light_offset] += jac_from_dcrcs(dcrcs, crcs, h, p)
             jac_num_samples[light_offset] += 1.0
 
             # drv
             dcrcs = to_crcs_R[:, 1]
-            jac[light_offset + 1] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac[light_offset + 1] += jac_from_dcrcs(dcrcs, crcs, h, p)
             jac_num_samples[light_offset + 1] += 1.0
 
             # drz
             dcrcs = to_crcs_R[:, 2]
-            jac[light_offset + 2] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac[light_offset + 2] += jac_from_dcrcs(dcrcs, crcs, h, p)
             jac_num_samples[light_offset + 2] += 1.0
     jac = jac / jac_num_samples
     return jac
@@ -318,11 +303,6 @@ def main():
     if num_sample_sources == 0:
         raise Exception('No samples found')
 
-    focal_length_x = 100.0
-    focal_length_y = 100.0
-    center_x = 240.0
-    center_y = 240.0
-
     initial_cam_pos = [
         [-3.0, 0.0, -2.0],
         [3.0, 0.0, -2.0],
@@ -333,8 +313,7 @@ def main():
         [0.0, -3.0, -2.0],
     ]
 
-    initial_state = [focal_length_x, focal_length_y, center_x, center_y]
-    initial_state += initial_cam_pos[0] # u, v, z (angles 0 by definition)
+    initial_state = initial_cam_pos[0] # u, v, z (angles 0 by definition)
     for i in range(0, num_sample_sources - 1):
         initial_state += initial_cam_pos[i + 1] # u, v, z
         roll = 0.0
@@ -356,6 +335,10 @@ def main():
                                method='Newton-CG')
     print(result)
     visualize_state(result.x, first_light_idx)
+    with open(args.data_dir / f'solution.pkl', 'wb') as dmp_file:
+        pickle.dump(result, dmp_file, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(samples, dmp_file, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(first_light_idx, dmp_file, pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == "__main__":
