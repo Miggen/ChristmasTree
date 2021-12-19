@@ -19,6 +19,40 @@ focal_length_y = 634.0
 center_x = 320.0
 center_y = 240.0
 
+bad_samples = [
+    (187, 5),
+    (303, 5),
+    (209, 5),
+    (57, 3),
+    (305, 5),
+    (58, 3),
+    (60, 3),
+    (115, 5),
+    (199, 3),
+    (196, 0),
+    (399, 3),
+    (198, 3),
+    (60, 4),
+    (397, 3),
+    (190, 3),
+    (193, 3),
+    (266, 5),
+    (192, 3),
+    (74, 3),
+    (345, 5),
+    (196, 3),
+    (53, 2),
+    (171, 3),
+    (325, 5),
+    (55, 3),
+    (51, 5),
+    (61, 3),
+    (35, 8),
+    (89, 0),
+    (89, 6),
+    (370, 5)
+]
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Estimate the 3D positions of the Camera and Lights using samples from Calibration.py.')
     parser.add_argument('--data-dir', required=True, type=Path, help='Data directory')
@@ -28,11 +62,12 @@ def parse_arguments():
 def collect_samples(args):
     samples = []
     num_sample_sources = 0
-    for sample_file_path in glob(f'{str(args.data_dir)}/sample_dmp_*.pkl'):
+    for sample_file_path in sorted(glob(f'{str(args.data_dir)}/sample_dmp_*.pkl')):
         with open(sample_file_path, 'rb') as sample_file:
             cam_samples = pickle.load(sample_file)
             for light_idx, cam_idx, px in cam_samples:
-                samples.append((light_idx, num_sample_sources, px))
+                if not (light_idx, cam_idx) in bad_samples:
+                    samples.append((light_idx, num_sample_sources, cam_idx, px))
         num_sample_sources += 1
     return samples, num_sample_sources
 
@@ -122,7 +157,7 @@ def get_cam_offset(cam_idx):
 def loss_function(x, samples, first_light_idx):
     loss = 0.0
     prev_cam_idx = -1
-    for light_idx, cam_idx, px in samples:
+    for light_idx, cam_idx, cam_id, px in samples:
         if prev_cam_idx != cam_idx:
             cam_offset = get_cam_offset(cam_idx)
             cam_u, cam_v, cam_z, cam_r, cam_p, cam_y = x[cam_offset:cam_offset + 6]
@@ -138,7 +173,7 @@ def loss_function(x, samples, first_light_idx):
         crcs = tsc_to_crcs(to_crcs_R, to_tsc_t, tsc)
         loss += (px[0] + ((focal_length_x * crcs[1]) / crcs[0]) - center_x)**2
         loss += (px[1] + ((focal_length_y * crcs[2]) / crcs[0]) - center_y)**2
-    print(f'{loss}')
+    print(f'{loss:e}')
     #visualize_state(x, first_light_idx)
     return loss
 
@@ -157,7 +192,7 @@ def loss_jacobian(x, samples, first_light_idx):
     jac = np.zeros(len(x))
     jac_num_samples = np.ones(len(x))
     prev_cam_idx = -1
-    for light_idx, cam_idx, px in samples:
+    for light_idx, cam_idx, cam_id, px in samples:
         if prev_cam_idx != cam_idx:
             cam_offset = get_cam_offset(cam_idx)
             cam_u, cam_v, cam_z, cam_r, cam_p, cam_y = x[cam_offset:cam_offset + 6]

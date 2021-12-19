@@ -3,6 +3,12 @@ import matplotlib.pyplot as plt
 from math import cos, sin, atan2
 import numpy as np
 import Lights
+import cv2
+
+focal_length_x = 645.0
+focal_length_y = 634.0
+center_x = 320.0
+center_y = 240.0
 
 def create_rotation(roll, pitch, yaw):
     cr = cos(roll)
@@ -37,38 +43,28 @@ def crcs_to_tsc(to_tcs_R, to_tsc_t, crcs):
 
 
 def get_cam_offset(cam_idx):
-    offset = 4
-    if cam_idx > 0:
-        offset += 3 +  (6 * (cam_idx - 1))
+    offset = 6 * cam_idx
     return offset
 
 def residual(x, samples, first_light_idx):
-    fx, fy, cx, cy = x[0:4]
-
     residual = []
     prev_cam_idx = -1
-    for light_idx, cam_idx, px in samples:
+    for light_idx, cam_idx, cam_id, px in samples:
         if prev_cam_idx != cam_idx:
             cam_offset = get_cam_offset(cam_idx)
-            if cam_idx > 0:
-                cam_u, cam_v, cam_z, cam_r, cam_p, cam_y = x[cam_offset:cam_offset + 6]
-            else:
-                cam_u, cam_v, cam_z = x[cam_offset:cam_offset + 3]
-                cam_r, cam_p, cam_y = [0.0, 0.0, 0.0]
+            cam_u, cam_v, cam_z, cam_r, cam_p, cam_y = x[cam_offset:cam_offset + 6]
 
             to_tsc_R = create_rotation(cam_r, cam_p, cam_y)
             to_crcs_R = np.transpose(to_tsc_R)
             to_tsc_t = np.array([cam_u, cam_v, cam_z])
             prev_cam_idx = cam_idx
 
-        if light_idx < (Lights.NUM_LIGHTS - 1):
-            light_offset = first_light_idx + (light_idx * 3)
-            tsc = x[light_offset:light_offset + 3]
-        else:
-            tsc = np.array([0.0, 0.0, 0.0])
+        light_offset = first_light_idx + (light_idx * 3)
+        tsc = x[light_offset:light_offset + 3]
+
         crcs = tsc_to_crcs(to_crcs_R, to_tsc_t, tsc)
-        loss = (px[0] + ((fx * crcs[1]) / crcs[0]) - cx)**2
-        loss += (px[1] + ((fy * crcs[2]) / crcs[0]) - cy)**2
+        loss = (px[0] + ((focal_length_x * crcs[1]) / crcs[0]) - center_x)**2
+        loss += (px[1] + ((focal_length_y * crcs[2]) / crcs[0]) - center_y)**2
         residual.append(loss)
     return residual
 
@@ -77,6 +73,34 @@ with open('/home/pi/Data/solution.pkl', 'rb') as f:
     samples = pickle.load(f)
     first_light_idx = pickle.load(f)
 
+res = residual(result.x, samples, first_light_idx)
+sort_index = np.argsort(res)
+sort_index = np.flip(sort_index)
+#plt.plot(res)
+#plt.show()
+
+#stop = False
+#for i in sort_index:
+#    light_idx, cam_idx, cam_id, px = samples[i]
+#    img = cv2.imread(f'/home/pi/Data/SampleDebug/Debug_{light_idx:04d}_{cam_id:03d}.png')
+#    try:
+#        cv2.imshow('preview', img)
+#    except:
+#        continue
+#    key = cv2.waitKey(0)
+#
+#    while True:
+#        if key == 27: # exit on ESC
+#            stop = True
+#            break
+#        elif key == 100:
+#            print(f'({light_idx}, {cam_id}),')
+#            break
+#        elif key == 107:
+#            break
+#        key = cv2.waitKey(0)
+#    if stop:
+#        break
 
 lights_x = []
 lights_y = []
@@ -86,14 +110,6 @@ for light_idx in range(0, Lights.NUM_LIGHTS - 1):
     lights_x.append(result.x[light_offset])
     lights_y.append(result.x[light_offset + 1])
     lights_z.append(result.x[light_offset + 2])
-
-lights_x.append(0.0)
-lights_y.append(0.0)
-lights_z.append(0.0)
-
-lights_x.reverse()
-lights_y.reverse()
-lights_z.reverse()
 
 prev_x = 0.0
 prev_y = 0.0
