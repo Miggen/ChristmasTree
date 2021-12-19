@@ -4,11 +4,15 @@ import Camera
 import Lights
 from scipy import optimize
 from pathlib import Path
-from math import cos, sin
+from math import cos, sin, atan2
 import numpy as np
 from glob import glob
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 import pdb
+
+PI = 3.1415
 
 
 def parse_arguments():
@@ -29,7 +33,7 @@ def collect_samples(args):
     return samples, num_sample_sources
 
 
-def create_transform(u, v, z, roll, pitch, yaw):
+def create_rotation(roll, pitch, yaw):
     cr = cos(roll)
     sr = sin(roll)
     cp = cos(pitch)
@@ -37,22 +41,18 @@ def create_transform(u, v, z, roll, pitch, yaw):
     cy = cos(yaw)
     sy = sin(yaw)
 
-    T = np.zeros((4, 4))
-    T[0, 0] = cy * cp
-    T[0, 1] = (cy * sp * sr) - (sy * cr)
-    T[0, 2] = (cy * sp * cr) + (sy * sr)
-    T[0, 3] = u
-    T[1, 0] = sy * cp
-    T[1, 1] = (sy * sp * sr) + (cy * cr)
-    T[1, 2] = (sy * sp * cr) - (cy * sr)
-    T[1, 3] = v
-    T[2, 0] = -sp
-    T[2, 1] = cp * sr
-    T[2, 2] = cp * cr
-    T[2, 3] = z
-    T[3, 3] = 1.0
+    R = np.zeros((3, 3))
+    R[0, 0] = cy * cp
+    R[0, 1] = (cy * sp * sr) - (sy * cr)
+    R[0, 2] = (cy * sp * cr) + (sy * sr)
+    R[1, 0] = sy * cp
+    R[1, 1] = (sy * sp * sr) + (cy * cr)
+    R[1, 2] = (sy * sp * cr) - (cy * sr)
+    R[2, 0] = -sp
+    R[2, 1] = cp * sr
+    R[2, 2] = cp * cr
 
-    return T
+    return R
 
 
 def get_rotation_jacobian(roll, pitch, yaw):
@@ -99,9 +99,14 @@ def get_rotation_jacobian(roll, pitch, yaw):
     return dr, dp, dy
 
 
-def transform(T, u, v, z):
-    res = T @ np.transpose(np.array([u, v, z, 1.0]))
-    return res[0], res[1], res[2]
+def tsc_to_crcs(to_crcs_R, to_tsc_t, tsc):
+    crcs = to_crcs_R @ (tsc - to_tsc_t)
+    return crcs
+
+
+def crcs_to_tsc(to_tcs_R, to_tsc_t, crcs):
+    tsc = (to_tcs_R @ crcs) + to_tsc_t
+    return tsc
 
 
 def get_cam_offset(cam_idx):
@@ -126,29 +131,38 @@ def loss_function(x, samples, first_light_idx):
                 cam_u, cam_v, cam_z = x[cam_offset:cam_offset + 3]
                 cam_r, cam_p, cam_y = [0.0, 0.0, 0.0]
 
-            if abs(cam_u) < 0.01:
-                pdb.set_trace()
-            T = create_transform(cam_u, cam_v, cam_z, cam_r, cam_p, cam_y)
+            to_tsc_R = create_rotation(cam_r, cam_p, cam_y)
+            to_crcs_R = np.transpose(to_tsc_R)
+            to_tsc_t = np.array([cam_u, cam_v, cam_z])
             prev_cam_idx = cam_idx
 
         if light_idx < (Lights.NUM_LIGHTS - 1):
             light_offset = first_light_idx + (light_idx * 3)
-            ru, rv, rz = x[light_offset:light_offset + 3]
+            tsc = x[light_offset:light_offset + 3]
         else:
-            ru, rv, rz = [0.0, 0.0, 0.0]
-
-        lu, lv, lz = transform(T, ru, rv, rz)
-        loss += (px[0] + ((fx * lv) / lu) - cx)**2
-        loss += (px[1] + ((fy * lz) / lu) - cy)**2
-    print(loss)
+            tsc = np.array([0.0, 0.0, 0.0])
+        crcs = tsc_to_crcs(to_crcs_R, to_tsc_t, tsc)
+        loss += (px[0] + ((fx * crcs[1]) / crcs[0]) - cx)**2
+        loss += (px[1] + ((fy * crcs[2]) / crcs[0]) - cy)**2
+    print(f'{loss} {fx} {fy} {cx} {cy}')
+    #visualize_state(x, first_light_idx)
     return loss
 
 
 # g = sum (x + fx * vcrc / ucrc - cx)^2 + sum (y + fy * zcrc / ucrc - cy)^2
 # g = h^2 + p^2, dg/da = 2 * h * dh/da + 2 * p * dp/da
 def loss_jacobian(x, samples, first_light_idx):
+    def jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p):
+        dcrcsxinv = dcrcs[0] / (crcs[0]**2)
+        dcrcsy_crcsxinv = dcrcs[1] / crcs[0] + crcs[1] * dcrcsxinv
+        dcrcsz_crcsxinv = dcrcs[2] / crcs[0] + crcs[2] * dcrcsxinv
+        dh = fx * dcrcsy_crcsxinv
+        dp = fy * dcrcsz_crcsxinv
+        return  2.0 * h * dh + 2.0 * p * dp
+
     fx, fy, cx, cy = x[0:4]
     jac = np.zeros(len(x))
+    jac_num_samples = np.ones(len(x))
     prev_cam_idx = -1
     for light_idx, cam_idx, px in samples:
         if prev_cam_idx != cam_idx:
@@ -159,107 +173,139 @@ def loss_jacobian(x, samples, first_light_idx):
                 cam_u, cam_v, cam_z = x[cam_offset:cam_offset + 3]
                 cam_r, cam_p, cam_y = [0.0, 0.0, 0.0]
 
-            T = create_transform(cam_u, cam_v, cam_z, cam_r, cam_p, cam_y)
-            dTdroll, dTdpitch, dTdyaw = get_rotation_jacobian(cam_r, cam_p, cam_y)
+            to_tsc_R = create_rotation(cam_r, cam_p, cam_y)
+            to_crcs_R = np.transpose(to_tsc_R)
+            to_tsc_t = np.array([cam_u, cam_v, cam_z])
+            dtscRdroll, dtscRdpitch, dtscRdyaw = get_rotation_jacobian(cam_r, cam_p, cam_y)
+            dcrcsRdroll = np.transpose(dtscRdroll)
+            dcrcsRdpitch = np.transpose(dtscRdpitch)
+            dcrcsRdyaw = np.transpose(dtscRdyaw)
             prev_cam_idx = cam_idx
 
         if light_idx < (Lights.NUM_LIGHTS - 1):
             light_offset = first_light_idx + (light_idx * 3)
-            ru, rv, rz = x[light_offset:light_offset + 3]
+            tsc = x[light_offset:light_offset + 3]
         else:
-            ru, rv, rz = [0.0, 0.0, 0.0]
+            tsc = np.array([0.0, 0.0, 0.0])
 
-        lu, lv, lz = transform(T, ru, rv, rz)
+        crcs = tsc_to_crcs(to_crcs_R, to_tsc_t, tsc)
 
-        h = px[0] + ((fx * lv) / lu) - cx
-        p = px[1] + ((fy * lz) / lu) - cy
+        h = px[0] + ((fx * crcs[1]) / crcs[0]) - cx
+        p = px[1] + ((fy * crcs[2]) / crcs[0]) - cy
 
         # dfx
-        jac[0] += 2 * h * lv / lu
+        jac[0] += 2 * h * crcs[1] / crcs[0]
+        jac_num_samples[0] += 1.0
 
         # dfy
-        jac[1] += 2 * p * lz / lu
+        jac[1] += 2 * p * crcs[2] / crcs[0]
+        jac_num_samples[1] += 1.0
 
         # dcx
         jac[2] += -2 * h
+        jac_num_samples[2] += 1.0
 
         # dcy
         jac[3] += -2 * p
+        jac_num_samples[3] += 1.0
 
         # dcamu
-        dlu = 1.0
-        dluinv = -dlu / (lu**2)
-        dh = fx * lv * dluinv
-        dp = fy * lz * dluinv
-        jac[cam_offset] += 2 * h * dh + 2 * p * dp
+        dcrcs = -to_crcs_R[:, 0]
+        jac[cam_offset] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+        jac_num_samples[cam_offset] += 1.0
 
         # dcamv
-        dlv = 1.0
-        dh = (fx / lu) * dlv
-        jac[cam_offset + 1] += 2 * h * dh
+        dcrcs = -to_crcs_R[:, 1]
+        jac[cam_offset + 1] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+        jac_num_samples[cam_offset + 1] += 1.0
 
         # dcamz
-        dlz = 1.0
-        dp = (fy / lu) * dlz
-        jac[cam_offset + 2] += 2 * p * dp
+        dcrcs = -to_crcs_R[:, 2]
+        jac[cam_offset + 2] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+        jac_num_samples[cam_offset + 2] += 1.0
 
         if cam_idx > 0:
-            ruvz = np.array([ru, rv, rz])
             # dcamr
-            du, dv, dz = dTdroll @ ruvz
-            duinv = -du / (lu**2)
-            dvuinv = dv / lu + lv * duinv
-            dzuinv = dz / lu + lz * duinv
-            dh = fx * dvuinv
-            dp = fy * dzuinv
-            jac[cam_offset + 3] += 2 * h * dh + 2 * p * dp
+            dcrcs = dcrcsRdroll @ (tsc - to_tsc_t)
+            jac[cam_offset + 3] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac_num_samples[cam_offset + 3] += 1.0
 
             # dcamp
-            du, dv, dz = dTdpitch @ ruvz
-            duinv = -du / (lu**2)
-            dvuinv = dv / lu + lv * duinv
-            dzuinv = dz / lu + lz * duinv
-            dh = fx * dvuinv
-            dp = fy * dzuinv
-            jac[cam_offset + 4] += 2 * h * dh + 2 * p * dp
+            dcrcs = dcrcsRdpitch @ (tsc - to_tsc_t)
+            jac[cam_offset + 4] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac_num_samples[cam_offset + 4] += 1.0
 
             # dcamy
-            du, dv, dz = dTdyaw @ ruvz
-            duinv = -du / (lu**2)
-            dvuinv = dv / lu + lv * duinv
-            dzuinv = dz / lu + lz * duinv
-            dh = fx * dvuinv
-            dp = fy * dzuinv
-            jac[cam_offset + 5] += 2 * h * dh + 2 * p * dp
+            dcrcs = dcrcsRdyaw @ (tsc - to_tsc_t)
+            jac[cam_offset + 5] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac_num_samples[cam_offset + 5] += 1.0
 
         if light_idx < (Lights.NUM_LIGHTS - 1):
             # dru
-            du, dv, dz = T[0:3, 0]
-            duinv = -du / (lu**2)
-            dvuinv = dv / lu + lv * duinv
-            dzuinv = dz / lu + lz * duinv
-            dh = fx * dvuinv
-            dp = fy * dzuinv
-            jac[light_offset] += 2 * h * dh + 2 * p * dp
+            dcrcs = to_crcs_R[:, 0]
+            jac[light_offset] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac_num_samples[light_offset] += 1.0
 
             # drv
-            du, dv, dz = T[0:3, 1]
-            duinv = -du / (lu**2)
-            dvuinv = dv / lu + lv * duinv
-            dzuinv = dz / lu + lz * duinv
-            dh = fx * dvuinv
-            dp = fy * dzuinv
-            jac[light_offset + 1] += 2 * h * dh + 2 * p * dp
+            dcrcs = to_crcs_R[:, 1]
+            jac[light_offset + 1] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac_num_samples[light_offset + 1] += 1.0
 
             # drz
-            du, dv, dz = T[0:3, 2]
-            duinv = -du / (lu**2)
-            dvuinv = dv / lu + lv * duinv
-            dzuinv = dz / lu + lz * duinv
-            dh = fx * dvuinv
-            dp = fy * dzuinv
-            jac[light_offset + 2] += 2 * h * dh + 2 * p * dp
+            dcrcs = to_crcs_R[:, 2]
+            jac[light_offset + 2] += jac_from_dcrcs(dcrcs, crcs, fx, fy, h, p)
+            jac_num_samples[light_offset + 2] += 1.0
+    jac = jac / jac_num_samples
     return jac
+
+
+def visualize_state(x, first_light_idx):
+    fig = plt.figure(1)
+    ax = fig.add_subplot(111, projection='3d')
+
+    num_cams_pos = (first_light_idx - 4 + 3) / 6.0
+    X = []
+    Y = []
+    Z = []
+    U = []
+    V = []
+    W = []
+    for cam_idx in range(0, round(num_cams_pos)):
+        cam_offset = get_cam_offset(cam_idx)
+        if cam_idx > 0:
+            cam_u, cam_v, cam_z, cam_r, cam_p, cam_y = x[cam_offset:cam_offset + 6]
+        else:
+            cam_u, cam_v, cam_z = x[cam_offset:cam_offset + 3]
+            cam_r, cam_p, cam_y = [0.0, 0.0, 0.0]
+
+        cam_tcs = np.array([cam_u, cam_v, cam_z])
+        to_tsc_R = create_rotation(cam_r, cam_p, cam_y)
+        u, v, w = crcs_to_tsc(to_tsc_R, np.array([0.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0]))
+
+        X.append(cam_u)
+        Y.append(cam_v)
+        Z.append(cam_z)
+        U.append(u)
+        V.append(v)
+        W.append(w)
+
+    ax.quiver(X, Y, Z, U, V, W)
+
+    lights_x = []
+    lights_y = []
+    lights_z = []
+    for light_idx in range(0, Lights.NUM_LIGHTS - 1):
+        light_offset = first_light_idx + (light_idx * 3)
+        lights_x.append(x[light_offset])
+        lights_y.append(x[light_offset + 1])
+        lights_z.append(x[light_offset + 2])
+
+    lights_x.append(0.0)
+    lights_y.append(0.0)
+    lights_z.append(0.0)
+
+    ax.scatter(lights_x, lights_y, lights_z)
+    plt.show()
 
 
 def main():
@@ -277,10 +323,26 @@ def main():
     center_x = 240.0
     center_y = 240.0
 
+    initial_cam_pos = [
+        [-3.0, 0.0, -2.0],
+        [3.0, 0.0, -2.0],
+        [2.0, 3.0, -1.0],
+        [-1.0, 3.0, -0.0],
+        [3.0, 0.0, -1.0],
+        [-3.0, -0.0, -1.0],
+        [0.0, -3.0, -2.0],
+    ]
+
     initial_state = [focal_length_x, focal_length_y, center_x, center_y]
-    initial_state += [-10.0, 0.0, 0.0] # u, v, z (angles 0 by definition)
+    initial_state += initial_cam_pos[0] # u, v, z (angles 0 by definition)
     for i in range(0, num_sample_sources - 1):
-        initial_state += [-10.0, 0.0, 0.0, 0.0, 0.0, 0.0] # u, v, z, roll, pitch, yaw
+        initial_state += initial_cam_pos[i + 1] # u, v, z
+        roll = 0.0
+        pitch = 0.0
+        x = initial_cam_pos[i + 1][0]
+        y = initial_cam_pos[i + 1][1]
+        yaw = PI + atan2(y, x)
+        initial_state += [roll, pitch, yaw]
 
     first_light_idx = len(initial_state)
     # Last light position chosen as origin, with rotation from first camera
@@ -293,6 +355,7 @@ def main():
                                args=(samples, first_light_idx),
                                method='Newton-CG')
     print(result)
+    visualize_state(result.x, first_light_idx)
 
 
 if __name__ == "__main__":
