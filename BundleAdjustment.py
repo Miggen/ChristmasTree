@@ -10,6 +10,7 @@ from scipy.sparse import lil_matrix
 import matplotlib.pyplot as plt
 import time
 from scipy.optimize import least_squares
+from calibrateCamera import load_coefficients
 
 import pdb
 
@@ -94,15 +95,24 @@ def initialize(args):
                     samples.append((light_idx, num_sample_sources, cam_idx, px))
         num_sample_sources += 1
 
+    camera_matrix, distortion_coeff = load_coefficients(f'{str(args.data_dir)}/calibration.yaml')
+    fx = camera_matrix[0, 0]
+    fy = camera_matrix[1, 1]
+    cx = camera_matrix[0, 2]
+    cy = camera_matrix[1, 2]
+
     n_observations = len(samples)
     camera_indices = np.empty(n_observations, dtype=int)
     point_indices = np.empty(n_observations, dtype=int)
-    points_2d = np.empty((n_observations, 2), dtype=float)
+    normalized_raw = np.empty((n_observations, 2), dtype=float)
 
     for i, sample in enumerate(samples):
         camera_indices[i] = sample[1]
         point_indices[i] = sample[0]
-        points_2d[i] = [float(sample[3][0] - center_x), float(sample[3][1] - center_y)]
+        x = (float(sample[3][0]) - cx) / fx
+        y = (float(sample[3][1]) - cy) / fy
+        normalized_raw[i] = [x, y]
+    normalized_warped = cv2.undistortPoints(normalized_raw, camera_matrix, distortion_coeff).reshape(-1, 2)
 
     initial_cam_pos = [
         [-3.0, 0.1, -2.0],
@@ -114,7 +124,7 @@ def initialize(args):
         [0.1, -3.0, -2.0],
     ]
 
-    camera_params = np.empty((n_cameras, 6), dtype=float)
+    camera_pos = np.empty((n_cameras, 6), dtype=float)
     for i in range(n_cameras):
         x, y, z = initial_cam_pos[i]
         roll = 0.0
@@ -123,12 +133,12 @@ def initialize(args):
         R = rotation_matrix_from_euler(roll, pitch, yaw)
         rodrigues = cv2.Rodrigues(R)
 
-        camera_params[i, 0:3] = rodrigues[0].reshape(3)
-        camera_params[i, 3:6] = initial_cam_pos[i]
+        camera_pos[i, 0:3] = rodrigues[0].reshape(3)
+        camera_pos[i, 3:6] = initial_cam_pos[i]
 
     points_3d = np.zeros((n_points, 3), dtype=float)
 
-    return camera_params, points_3d, camera_indices, point_indices, points_2d
+    return camera_pos, points_3d, camera_indices, point_indices, normalized_warped
 
 def rotate(points, rot_vecs):
     """Rotate points by given rotation vectors.
@@ -145,34 +155,23 @@ def rotate(points, rot_vecs):
 
     return cos_theta * points + sin_theta * np.cross(v, points) + dot * (1 - cos_theta) * v
 
-def project(points, camera_params):
+def project(points, camera_pos):
     """Convert 3-D points to 2-D by projecting onto images."""
-    points_proj = rotate(points, camera_params[:, :3])
-    points_proj += camera_params[:, 3:6]
-    points_proj = -points_proj[:, :2] / points_proj[:, 2, np.newaxis]
-    f = focal_length_x
-    k1 = 0.0
-    k2 = 0.0
-    n = np.sum(points_proj**2, axis=1)
-    r = 1 + k1 * n + k2 * n**2
-    points_proj *= (r * f)[:, np.newaxis]
-    return points_proj
+    normalized_proj = rotate(points, camera_pos[:, :3])
+    normalized_proj += camera_pos[:, 3:6]
+    normalized_proj = -normalized_proj[:, 1:] / normalized_proj[:, 0, np.newaxis]
+    return normalized_proj
 
 
-num_calls = 0
-def fun(params, n_cameras, n_points, camera_indices, point_indices, points_2d):
+def fun(params, n_cameras, n_points, camera_indices, point_indices, normalized_warped):
     """Compute residuals.
 
     `params` contains camera parameters and 3-D coordinates.
     """
-    camera_params = params[:n_cameras * 6].reshape((n_cameras, 6))
+    camera_pos = params[:n_cameras * 6].reshape((n_cameras, 6))
     points_3d = params[n_cameras * 6:].reshape((n_points, 3))
-    points_proj = project(points_3d[point_indices], camera_params[camera_indices])
-    global num_calls
-    if num_calls % 12 == 0:
-        visualize(params, n_cameras, n_points)
-    num_calls += 1
-    return (points_proj - points_2d).ravel()
+    normalized_proj = project(points_3d[point_indices], camera_pos[camera_indices])
+    return (normalized_proj - normalized_warped).ravel()
 
 def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indices):
     m = camera_indices.size * 2
@@ -218,24 +217,23 @@ def main():
     if not args.data_dir.exists():
         raise Exception('Data directory is empty')
 
-    camera_params, points_3d, camera_indices, point_indices, points_2d = initialize(args)
-    if len(points_2d) == 0:
+    camera_pos, points_3d, camera_indices, point_indices, normalized_warped = initialize(args)
+    if len(normalized_warped) == 0:
         raise Exception('No samples found')
-    n_cameras = camera_params.shape[0]
+    n_cameras = camera_pos.shape[0]
     n_points = points_3d.shape[0]
 
-    x0 = np.hstack((camera_params.ravel(), points_3d.ravel()))
-    f0 = fun(x0, n_cameras, n_points, camera_indices, point_indices, points_2d)
+    x0 = np.hstack((camera_pos.ravel(), points_3d.ravel()))
 
     A = bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indices)
     t0 = time.time()
     res = least_squares(fun, x0, jac_sparsity=A, verbose=2, x_scale='jac', ftol=1e-4, method='trf', loss='soft_l1',
-                        args=(n_cameras, n_points, camera_indices, point_indices, points_2d))
+                        args=(n_cameras, n_points, camera_indices, point_indices, normalized_warped))
     t1 = time.time()
     print("Optimization took {0:.0f} seconds".format(t1 - t0))
     with open(args.data_dir / f'solution_bundleAdjustment.pkl', 'wb') as dmp_file:
         pickle.dump(res, dmp_file, pickle.HIGHEST_PROTOCOL)
-        pickle.dump((n_cameras, n_points, camera_indices, point_indices, points_2d), dmp_file, pickle.HIGHEST_PROTOCOL)
+        pickle.dump((n_cameras, n_points, camera_indices, point_indices, normalized_warped), dmp_file, pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == "__main__":

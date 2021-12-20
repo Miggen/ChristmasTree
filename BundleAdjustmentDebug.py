@@ -3,29 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import pdb
-
-
-def visualize(x, n_cameras, n_points):
-    fig = plt.figure(1)
-    ax = fig.add_subplot(111, projection='3d')
-    lights_offset = n_cameras * 6
-
-    lights_3d = x[lights_offset:].reshape((n_points, 3))
-
-    cam_pos = np.empty((n_cameras, 6), dtype=float)
-    for i in range(0, n_cameras):
-        offset = i * 6
-        cam_pos[i, 0:3] = x[i+3:i+6]
-        R = np.empty((3,3), dtype=float)
-        cv2.Rodrigues(x[i:i+3], R)
-        cam_pos[i, 3:6] = R @ np.array([1.0, 0.0, 0.0])
-
-    ax.quiver(cam_pos[:,0], cam_pos[:,1], cam_pos[:,2], cam_pos[:,3], cam_pos[:,4], cam_pos[:,5], color='r')
-    ax.scatter(lights_3d[:,0], lights_3d[:, 1], lights_3d[:, 2])
-    ax.set_xlim(-5, 5)
-    ax.set_ylim(-5, 5)
-    ax.set_zlim(-5, 5)
-    plt.show()
+from BundleAdjustment import visualize
 
 
 def filter_bad_samples(n_cameras, camera_indices, point_indices, result):
