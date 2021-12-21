@@ -112,9 +112,9 @@ def initialize(args):
         x = (float(sample[3][0]) - cx) / fx
         y = (float(sample[3][1]) - cy) / fy
         normalized_raw[i] = [x, y]
-    normalized_warped = cv2.undistortPoints(normalized_raw, camera_matrix, distortion_coeff).reshape(-1, 2)
+    #normalized_warped = cv2.undistortPoints(normalized_raw, camera_matrix, distortion_coeff).reshape(-1, 2)
 
-    initial_cam_pos = [
+    camera_in_origin = [
         [-3.0, 0.1, -2.0],
         [3.0, 0.1, -2.0],
         [2.0, 3.0, -1.0],
@@ -126,19 +126,19 @@ def initialize(args):
 
     camera_pos = np.empty((n_cameras, 6), dtype=float)
     for i in range(n_cameras):
-        x, y, z = initial_cam_pos[i]
+        x, y, z = camera_in_origin[i]
         roll = 0.0
         pitch = 0.0
         yaw = PI + atan2(y, x)
-        R = rotation_matrix_from_euler(roll, pitch, yaw)
+        R = rotation_matrix_from_euler(-roll, -pitch, -yaw)
         rodrigues = cv2.Rodrigues(R)
 
-        camera_pos[i, 0:3] = rodrigues[0].reshape(3)
-        camera_pos[i, 3:6] = initial_cam_pos[i]
+        camera_pos[i, :3] = rodrigues[0].reshape(3)
+        camera_pos[i, 3:] = -R @ camera_in_origin[i]
 
     points_3d = np.zeros((n_points, 3), dtype=float)
 
-    return camera_pos, points_3d, camera_indices, point_indices, normalized_warped
+    return camera_pos, points_3d, camera_indices, point_indices, normalized_raw
 
 def rotate(points, rot_vecs):
     """Rotate points by given rotation vectors.
@@ -161,7 +161,6 @@ def project(points, camera_pos):
     normalized_proj += camera_pos[:, 3:6]
     normalized_proj = -normalized_proj[:, 1:] / normalized_proj[:, 0, np.newaxis]
     return normalized_proj
-
 
 def fun(params, n_cameras, n_points, camera_indices, point_indices, normalized_warped):
     """Compute residuals.
@@ -189,22 +188,22 @@ def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indice
 
     return A
 
-def visualize(x, n_cameras, n_points):
+def visualize(params, n_cameras, n_points):
     fig = plt.figure(1)
     ax = fig.add_subplot(111, projection='3d')
     lights_offset = n_cameras * 6
 
-    lights_3d = x[lights_offset:].reshape((n_points, 3))
+    lights_3d = params[lights_offset:].reshape((n_points, 3))
 
-    cam_pos = np.empty((n_cameras, 6), dtype=float)
+    camera_pos = params[:n_cameras * 6].reshape((n_cameras, 6))
+    camera_arrows = np.empty((n_cameras, 6), dtype=float)
     for i in range(0, n_cameras):
-        offset = i * 6
-        cam_pos[i, 0:3] = x[i+3:i+6]
         R = np.empty((3,3), dtype=float)
-        cv2.Rodrigues(x[i:i+3], R)
-        cam_pos[i, 3:6] = R @ np.array([1.0, 0.0, 0.0])
+        cv2.Rodrigues(camera_pos[i, :3], R)
+        camera_arrows[i, :3] = np.transpose(-R) @ camera_pos[i, 3:]
+        camera_arrows[i, 3:] = np.transpose(R) @ np.array([1.0, 0.0, 0.0])
 
-    ax.quiver(cam_pos[:,0], cam_pos[:,1], cam_pos[:,2], cam_pos[:,3], cam_pos[:,4], cam_pos[:,5], color='r')
+    ax.quiver(camera_arrows[:,0], camera_arrows[:,1], camera_arrows[:,2], camera_arrows[:,3], camera_arrows[:,4], camera_arrows[:,5], color='r')
     ax.scatter(lights_3d[:,0], lights_3d[:, 1], lights_3d[:, 2])
     ax.set_xlim(-5, 5)
     ax.set_ylim(-5, 5)

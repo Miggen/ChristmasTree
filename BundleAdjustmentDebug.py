@@ -52,3 +52,5 @@ with open('/home/pi/Data/solution_bundleAdjustment.pkl', 'rb') as f:
 
 #filter_bad_samples(n_cameras, camera_indices, point_indices, result)
 visualize(result.x, n_cameras, n_points)
+#plt.plot(result.fun)
+#plt.show()
