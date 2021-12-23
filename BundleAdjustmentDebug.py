@@ -45,7 +45,7 @@ def filter_bad_samples(n_cameras, camera_indices, point_indices, result):
             break
 
 
-with open('/home/pi/Data/solution_bundleAdjustment.pkl', 'rb') as f:
+with open('/home/pi/Data/solution_bundleAdjustment_dbg.pkl', 'rb') as f:
     result = pickle.load(f)
     n_cameras, n_points, camera_indices, point_indices, points_2d = pickle.load(f)
 
