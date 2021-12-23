@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import pdb
-from BundleAdjustment import visualize
+from BundleAdjustment import visualize, get_points
 
 
 def filter_bad_samples(n_cameras, camera_indices, point_indices, result):
@@ -51,6 +51,8 @@ with open('/home/pi/Data/solution_bundleAdjustment.pkl', 'rb') as f:
 
 
 #filter_bad_samples(n_cameras, camera_indices, point_indices, result)
-visualize(result.x, n_cameras, n_points)
+#visualize(result.x, n_cameras, n_points)
 #plt.plot(result.fun)
 #plt.show()
+
+get_points(result.x, n_cameras, n_points)

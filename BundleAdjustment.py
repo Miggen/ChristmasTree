@@ -170,10 +170,16 @@ def fun(params, n_cameras, n_points, camera_indices, point_indices, normalized_w
     camera_pos = params[:n_cameras * 6].reshape((n_cameras, 6))
     points_3d = params[n_cameras * 6:].reshape((n_points, 3))
     normalized_proj = project(points_3d[point_indices], camera_pos[camera_indices])
-    return (normalized_proj - normalized_warped).ravel()
+    projection_residual = (normalized_proj - normalized_warped).ravel()
+
+    expected_max_distance = 0.15
+    point_distances = np.linalg.norm(points_3d[:-1, :] - points_3d[1:, :], axis=1)
+    distance_residual = np.maximum(0.0, point_distances - expected_max_distance)
+
+    return np.concatenate([projection_residual, distance_residual])
 
 def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indices):
-    m = camera_indices.size * 2
+    m = camera_indices.size * 2 + (n_points - 1)
     n = n_cameras * 6 + n_points * 3
     A = lil_matrix((m, n), dtype=int)
 
@@ -185,6 +191,10 @@ def bundle_adjustment_sparsity(n_cameras, n_points, camera_indices, point_indice
     for s in range(3):
         A[2 * i, n_cameras * 6 + point_indices * 3 + s] = 1
         A[2 * i + 1, n_cameras * 6 + point_indices * 3 + s] = 1
+
+    j = np.arange(n_points - 1)
+    for s in range(3 * 2):
+        A[camera_indices.size * 2 + j, n_cameras * 6 + j * 3 + s] = 1
 
     return A
 
@@ -201,14 +211,28 @@ def visualize(params, n_cameras, n_points):
         R = np.empty((3,3), dtype=float)
         cv2.Rodrigues(camera_pos[i, :3], R)
         camera_arrows[i, :3] = np.transpose(-R) @ camera_pos[i, 3:]
-        camera_arrows[i, 3:] = np.transpose(R) @ np.array([1.0, 0.0, 0.0])
+        camera_arrows[i, 3:] = np.transpose(R) @ np.array([0.1, 0.0, 0.0])
 
     ax.quiver(camera_arrows[:,0], camera_arrows[:,1], camera_arrows[:,2], camera_arrows[:,3], camera_arrows[:,4], camera_arrows[:,5], color='r')
     ax.scatter(lights_3d[:,0], lights_3d[:, 1], lights_3d[:, 2])
-    ax.set_xlim(-5, 5)
-    ax.set_ylim(-5, 5)
-    ax.set_zlim(-5, 5)
     plt.show()
+
+def get_points(params, n_cameras, n_points):
+    points_3d = params[n_cameras * 6:].reshape((n_points, 3))
+    points_3d -= points_3d[-1, :]
+    mean_point = np.mean(points_3d, axis=0)
+    points_3d = np.transpose(points_3d)
+
+    w = mean_point / np.linalg.norm(mean_point)
+    u = np.array([1.0, 0.0, -w[0] / w[2]])
+    u /= np.linalg.norm(u)
+    v = np.cross(w, u)
+
+    R = [-u, -v, -w]
+
+    points_3d = R @ points_3d
+    points_3d = np.transpose(points_3d)
+    return points_3d
 
 def main():
     args = parse_arguments()
@@ -230,9 +254,13 @@ def main():
                         args=(n_cameras, n_points, camera_indices, point_indices, normalized_warped))
     t1 = time.time()
     print("Optimization took {0:.0f} seconds".format(t1 - t0))
-    with open(args.data_dir / f'solution_bundleAdjustment.pkl', 'wb') as dmp_file:
+    with open(args.data_dir / f'solution_bundleAdjustment_dbg.pkl', 'wb') as dmp_file:
         pickle.dump(res, dmp_file, pickle.HIGHEST_PROTOCOL)
         pickle.dump((n_cameras, n_points, camera_indices, point_indices, normalized_warped), dmp_file, pickle.HIGHEST_PROTOCOL)
+
+    rotated_points = get_points(res.x, n_cameras, n_points)
+    with open(args.data_dir / f'solution.pkl', 'wb') as dmp_file:
+        pickle.dump(rotated_points, dmp_file, pickle.HIGHEST_PROTOCOL)
 
 
 if __name__ == "__main__":
