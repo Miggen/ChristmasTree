@@ -6,10 +6,15 @@ import numpy as np
 import threading
 import queue
 from RotatingPlane import RotatingPlane
+from Raindrops import Raindrops
+from Pulses import Pulses
 
 
 input_cmds = [
     "exit",
+    "plane",
+    "rain",
+    "pulses",
 ]
 
 
@@ -48,18 +53,28 @@ def main():
 
     keep_running = True
     while keep_running:
-        algo.step()
-        light_control.update()
-        if inputQueue.qsize() > 0:
-            input_str = inputQueue.get()
-            if input_str == input_cmds[0]:
-                keep_running = False
-                break
-            else:
-                print(f'Unknown command {input_str}')
-                print('Available commands:')
-                for cmd in input_cmds:
-                    print(f'\t{cmd}')
+        try:
+            algo.step()
+            light_control.update()
+            if inputQueue.qsize() > 0:
+                input_str = inputQueue.get()
+                if input_str == input_cmds[0]:
+                    keep_running = False
+                    break
+                elif input_str == input_cmds[1]:
+                    algo = RotatingPlane(lights_pos, light_control)
+                elif input_str == input_cmds[2]:
+                    algo = Raindrops(lights_pos, light_control)
+                elif input_str == input_cmds[3]:
+                    algo = Pulses(lights_pos, light_control)
+                else:
+                    print(f'Unknown command {input_str}')
+                    print('Available commands:')
+                    for cmd in input_cmds:
+                        print(f'\t{cmd}')
+        except Exception as e:
+            print(e)
+            keep_running = False
 
 
 if __name__ == "__main__":
