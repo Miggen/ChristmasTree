@@ -5,9 +5,11 @@ import Lights
 import numpy as np
 import threading
 import queue
+import os
 from RotatingPlane import RotatingPlane
 from Raindrops import Raindrops
 from Pulses import Pulses
+from GifVisualizer import GifVisualizer
 
 
 input_cmds = [
@@ -15,6 +17,7 @@ input_cmds = [
     "plane",
     "rain",
     "pulses",
+    "fire",
 ]
 
 
@@ -67,6 +70,10 @@ def main():
                     algo = Raindrops(lights_pos, light_control)
                 elif input_str == input_cmds[3]:
                     algo = Pulses(lights_pos, light_control)
+                elif input_str == input_cmds[4]:
+                    dir_path = os.path.dirname(os.path.realpath(__file__))
+                    algo = GifVisualizer(lights_pos, light_control,
+                            f'{dir_path}/Animated_fire_by_nevit.gif', [1.0, 0.5, 0.5])
                 else:
                     print(f'Unknown command {input_str}')
                     print('Available commands:')
