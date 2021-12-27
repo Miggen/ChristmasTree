@@ -2,6 +2,7 @@ import numpy as np
 import random
 from scipy.spatial import distance
 from math import sqrt, acos, atan2
+import time
 
 
 snake_color = (255, 255, 255)
@@ -22,10 +23,20 @@ class Snake:
             for dst in closest[src, 1:]:
                 if self.distances[src, dst] > 0.3:
                     break
-                neighbors.append(dst)
+
+                closer_neighbor = False
+                for neighbor in neighbors:
+                    if self.distances[neighbor, dst] < self.distances[src, dst]:
+                        closer_neighbor = True
+                        break
+
+                if not closer_neighbor:
+                    neighbors.append(dst)
+
             self.neighbors.append(neighbors)
 
         self.reset()
+        self.last_time = time.time()
 
     def reset(self):
         self.light_control.set_all(*no_color)
@@ -75,3 +86,9 @@ class Snake:
 
     def step(self):
         self.move_snake()
+        elapsed_time = time.time() - self.last_time
+        remaining_time = 0.1 - elapsed_time
+        if remaining_time > 0.0:
+            time.sleep(remaining_time)
+        self.last_time = time.time()
+

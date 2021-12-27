@@ -20,7 +20,6 @@ input_cmds = [
     "pulses",
     "fire",
     "snake",
-    "c",
 ]
 
 
@@ -79,9 +78,6 @@ def main():
                             f'{dir_path}/Animated_fire_by_nevit.gif', [1.0, 0.5, 0.5])
                 elif input_str == input_cmds[5]:
                     algo = Snake(lights_pos, light_control)
-                elif input_str == input_cmds[6]:
-                    algo.step()
-                    light_control.update()
                 else:
                     print(f'Unknown command {input_str}')
                     print('Available commands:')
