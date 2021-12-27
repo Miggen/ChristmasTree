@@ -60,6 +60,8 @@ def main():
     keep_running = True
     while keep_running:
         try:
+            algo.step()
+            light_control.update()
             if inputQueue.qsize() > 0:
                 input_str = inputQueue.get()
                 if input_str == input_cmds[0]:

@@ -14,62 +14,23 @@ class Snake:
         self.light_control = light_control
         self.lights_pos = lights_pos
         n_lights = lights_pos.shape[0]
-        self.neighbors = np.zeros((n_lights, 6), dtype=int) - 1
+        self.distances = distance.squareform(distance.pdist(lights_pos, 'cityblock'))
+        closest = np.argsort(self.distances, axis=1)
+        self.neighbors = []
         for src in range(0, n_lights):
-            r_min = [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
-            for dst in range(src + 1, n_lights):
-                delta = lights_pos[dst] - lights_pos[src]
-                delta_sum = np.sum(np.abs(delta))
-                if delta_sum < 0.3:
-                    sectors = self.sector_from_delta(*delta)
-                    for sector_idx in sectors:
-                        if delta_sum < r_min[sector_idx]:
-                            r_min[sector_idx] = delta_sum
-                            self.neighbors[src, sector_idx] = dst
-                            self.neighbors[dst, self.invert_sector(sector_idx)] = src
+            neighbors = []
+            for dst in closest[src, 1:]:
+                if self.distances[src, dst] > 0.3:
+                    break
+                neighbors.append(dst)
+            self.neighbors.append(neighbors)
+
         self.reset()
-
-    def invert_sector(self, sector):
-        if sector == 0:
-            inv_sector = 2
-        elif sector == 1:
-            inv_sector = 3
-        elif sector == 2:
-            inv_sector = 0
-        elif sector == 3:
-            inv_sector = 1
-        elif sector == 4:
-            inv_sector = 5
-        elif sector == 5:
-            inv_sector = 4
-        else:
-            inv_sector = -1
-        return inv_sector
-
-    def sector_from_delta(self, x, y, z):
-        sectors = []
-        if x > 0.0:
-            sectors.append(0)
-        else:
-            sectors.append(2)
-
-        if y > 0.0:
-            sectors.append(1)
-        else:
-            sectors.append(3)
-
-        if z > 0.0:
-            sectors.append(4)
-        else:
-            sectors.append(5)
-
-        pos = [abs(x), abs(y), abs(z)]
-        sectors = [s for _, s in sorted(zip(pos, sectors), reverse=True)]
-        return sectors
 
     def reset(self):
         self.light_control.set_all(*no_color)
         self.snake = []
+        self.history = []
         self.snake.append(self.get_new_idx())
         self.light_control.set(self.snake[0], *snake_color)
         self.create_food()
@@ -86,22 +47,16 @@ class Snake:
         return random.choice(available_indices)
 
     def next_snake_idx(self):
-        curr_idx = self.snake[0]
-        delta = self.lights_pos[self.food, :] - self.lights_pos[curr_idx, :]
-        delta_sum = np.sum(np.abs(delta))
-        sectors = self.sector_from_delta(*delta)
-        print(f'Curr: {curr_idx} {self.lights_pos[curr_idx, :]}')
-        print(f'Food: {self.food} {self.lights_pos[self.food, :]}')
-        for i, n in enumerate(self.neighbors[curr_idx, :]):
-            print(f'Neighbor: {i} {n} {self.lights_pos[n, :]}')
-        for sector in sectors:
-            neighbor = self.neighbors[curr_idx, sector]
-            if neighbor >= 0 and neighbor not in self.snake:
-                neighbor_delta_sum = np.sum(np.abs(self.lights_pos[self.food, :] - self.lights_pos[neighbor, :]))
-                if neighbor_delta_sum < delta_sum:
-                    print(f'Result: {neighbor}')
-                    return neighbor
-        return self.snake[0]
+        src = self.snake[0]
+        next_idx = src
+        best_dist = 10000.0
+        for dst in self.neighbors[src]:
+            if dst not in self.snake and dst not in self.history:
+                dist = self.distances[dst, self.food]
+                if dist < best_dist:
+                    best_dist = dist
+                    next_idx = dst
+        return next_idx
 
     def move_snake(self):
         next_idx = self.next_snake_idx()
@@ -112,9 +67,11 @@ class Snake:
             self.light_control.set(next_idx, *snake_color)
             if next_idx == self.food:
                 self.create_food()
+                self.history = []
             else:
                 outgoing_idx = self.snake.pop()
                 self.light_control.set(outgoing_idx, *no_color)
+                self.history.append(outgoing_idx)
 
     def step(self):
         self.move_snake()
