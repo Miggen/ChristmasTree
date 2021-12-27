@@ -10,6 +10,7 @@ from RotatingPlane import RotatingPlane
 from Raindrops import Raindrops
 from Pulses import Pulses
 from GifVisualizer import GifVisualizer
+from Snake import Snake
 
 
 input_cmds = [
@@ -18,6 +19,8 @@ input_cmds = [
     "rain",
     "pulses",
     "fire",
+    "snake",
+    "c",
 ]
 
 
@@ -57,8 +60,6 @@ def main():
     keep_running = True
     while keep_running:
         try:
-            algo.step()
-            light_control.update()
             if inputQueue.qsize() > 0:
                 input_str = inputQueue.get()
                 if input_str == input_cmds[0]:
@@ -74,6 +75,11 @@ def main():
                     dir_path = os.path.dirname(os.path.realpath(__file__))
                     algo = GifVisualizer(lights_pos, light_control,
                             f'{dir_path}/Animated_fire_by_nevit.gif', [1.0, 0.5, 0.5])
+                elif input_str == input_cmds[5]:
+                    algo = Snake(lights_pos, light_control)
+                elif input_str == input_cmds[6]:
+                    algo.step()
+                    light_control.update()
                 else:
                     print(f'Unknown command {input_str}')
                     print('Available commands:')
