@@ -70,16 +70,20 @@ def main():
         if not keep_running:
             break
 
+        baseline_rgb = camera.get()
+        baseline_img = str(sample_img_dir / f'Baseline_{camera_idx:03d}.png')
+        cv2.imwrite(baseline_img, baseline_rgb)
+
         samples = []
-        for idx in range(0, lights.NUM_LIGHTS):
+        for idx in range(0, Lights.NUM_LIGHTS):
             lights.set(idx, 255, 255, 255)
             lights.update()
             lights.set(idx, 0, 0, 0)
             rgb = camera.get()
             sample_img = str(sample_img_dir / f'Sample_{idx:04d}_{camera_idx:03d}.png')
             cv2.imwrite(sample_img, rgb)
-
-            maxLoc, maxVal = identify_bright_spot(rgb)
+            delta_rgb = cv2.subtract(rgb, baseline_rgb)
+            maxLoc, maxVal = identify_bright_spot(delta_rgb)
             save_debug_img(rgb, maxLoc, maxVal, idx, camera_idx, args, debug_img_dir)
 
             if maxVal > 180:

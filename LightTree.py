@@ -79,7 +79,8 @@ def main():
                 elif input_str == input_cmds[5]:
                     algo = Snake(lights_pos, light_control)
                 else:
-                    print(f'Unknown command {input_str}')
+                    if not input_str == "help":
+                        print(f'Unknown command {input_str}')
                     print('Available commands:')
                     for cmd in input_cmds:
                         print(f'\t{cmd}')
