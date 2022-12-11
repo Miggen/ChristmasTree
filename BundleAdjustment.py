@@ -21,37 +21,6 @@ center_x = 320.0
 center_y = 240.0
 
 bad_samples = [
-    (187, 5),
-    (303, 5),
-    (209, 5),
-    (57, 3),
-    (305, 5),
-    (58, 3),
-    (60, 3),
-    (115, 5),
-    (199, 3),
-    (196, 0),
-    (399, 3),
-    (198, 3),
-    (60, 4),
-    (397, 3),
-    (190, 3),
-    (193, 3),
-    (266, 5),
-    (192, 3),
-    (74, 3),
-    (345, 5),
-    (196, 3),
-    (53, 2),
-    (171, 3),
-    (325, 5),
-    (55, 3),
-    (51, 5),
-    (61, 3),
-    (35, 8),
-    (89, 0),
-    (89, 6),
-    (370, 5)
 ]
 
 def parse_arguments():
@@ -115,13 +84,12 @@ def initialize(args):
     #normalized_warped = cv2.undistortPoints(normalized_raw, camera_matrix, distortion_coeff).reshape(-1, 2)
 
     camera_in_origin = [
-        [-3.0, 0.1, -2.0],
-        [3.0, 0.1, -2.0],
-        [2.0, 3.0, -1.0],
-        [-1.0, 3.0, -0.1],
-        [3.0, 0.1, -1.0],
-        [-3.0, -0.1, -1.0],
-        [0.1, -3.0, -2.0],
+        [0.1, -3., -1.0],
+        [-2.0, 2.1, -1.0],
+        [-3.1, 0.1, -2.0],
+        [-1.0, 3.0, -2.1],
+        [3.0, 3.1, -0.1],
+        [2.0, -0.1, -2.0],
     ]
 
     camera_pos = np.empty((n_cameras, 6), dtype=float)
@@ -254,7 +222,7 @@ def main():
                         args=(n_cameras, n_points, camera_indices, point_indices, normalized_warped))
     t1 = time.time()
     print("Optimization took {0:.0f} seconds".format(t1 - t0))
-    with open(args.data_dir / f'solution_bundleAdjustment_dbg.pkl', 'wb') as dmp_file:
+    with open(args.data_dir / f'solution_bundleAdjustment_dbg.pkl', '+wb') as dmp_file:
         pickle.dump(res, dmp_file, pickle.HIGHEST_PROTOCOL)
         pickle.dump((n_cameras, n_points, camera_indices, point_indices, normalized_warped), dmp_file, pickle.HIGHEST_PROTOCOL)
 

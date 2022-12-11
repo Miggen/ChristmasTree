@@ -11,6 +11,7 @@ from Raindrops import Raindrops
 from Pulses import Pulses
 from GifVisualizer import GifVisualizer
 from Snake import Snake
+from PlaneNormal import PlaneNormal
 
 
 input_cmds = [
@@ -20,6 +21,7 @@ input_cmds = [
     "pulses",
     "fire",
     "snake",
+    "normal",
 ]
 
 
@@ -62,25 +64,29 @@ def main():
             algo.step()
             light_control.update()
             if inputQueue.qsize() > 0:
-                input_str = inputQueue.get()
-                if input_str == input_cmds[0]:
+                input_str = inputQueue.get().split(" ")
+                mode = input_str[0]
+                mode_args = input_str[1:]
+                if mode == input_cmds[0]:
                     keep_running = False
                     break
-                elif input_str == input_cmds[1]:
+                elif mode == input_cmds[1]:
                     algo = RotatingPlane(lights_pos, light_control)
-                elif input_str == input_cmds[2]:
+                elif mode == input_cmds[2]:
                     algo = Raindrops(lights_pos, light_control)
-                elif input_str == input_cmds[3]:
+                elif mode == input_cmds[3]:
                     algo = Pulses(lights_pos, light_control)
-                elif input_str == input_cmds[4]:
+                elif mode == input_cmds[4]:
                     dir_path = os.path.dirname(os.path.realpath(__file__))
                     algo = GifVisualizer(lights_pos, light_control,
                             f'{dir_path}/Animated_fire_by_nevit.gif', [1.0, 0.5, 0.5])
-                elif input_str == input_cmds[5]:
+                elif mode == input_cmds[5]:
                     algo = Snake(lights_pos, light_control)
+                elif mode == input_cmds[6]:
+                    algo = PlaneNormal(lights_pos, light_control, mode_args)
                 else:
-                    if not input_str == "help":
-                        print(f'Unknown command {input_str}')
+                    if not mode == "help":
+                        print(f'Unknown command {mode}')
                     print('Available commands:')
                     for cmd in input_cmds:
                         print(f'\t{cmd}')

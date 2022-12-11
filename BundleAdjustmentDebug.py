@@ -24,7 +24,7 @@ def filter_bad_samples(n_cameras, camera_indices, point_indices, result):
         cam_idx = camera_indices[int(i / 2)]
 
         cam_id = mapping[cam_idx]
-        img = cv2.imread(f'/home/pi/Data/SampleDebug/Debug_{light_idx:04d}_{cam_id:03d}.png')
+        img = cv2.imread(f'/home/pi/CL_Data2022/SampleDebug/Debug_{light_idx:04d}_{cam_id:03d}.png')
         try:
             cv2.imshow('preview', img)
         except:
@@ -45,13 +45,13 @@ def filter_bad_samples(n_cameras, camera_indices, point_indices, result):
             break
 
 
-with open('/home/pi/Data/solution_bundleAdjustment_dbg.pkl', 'rb') as f:
+with open('/home/pi/CL_Data2022/solution_bundleAdjustment_dbg.pkl', 'rb') as f:
     result = pickle.load(f)
     n_cameras, n_points, camera_indices, point_indices, points_2d = pickle.load(f)
 
 
 #filter_bad_samples(n_cameras, camera_indices, point_indices, result)
-#visualize(result.x, n_cameras, n_points)
+visualize(result.x, n_cameras, n_points)
 #plt.plot(result.fun)
 #plt.show()
 
