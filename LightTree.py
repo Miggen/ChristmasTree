@@ -19,7 +19,6 @@ input_cmds = [
     "exit",
     "plane",
     "rain",
-    "pulsesPositionBased",
     "pulses",
     "fire",
     "snake",
@@ -78,19 +77,17 @@ def main():
                 elif mode == input_cmds[2]:
                     algo = Raindrops(lights_pos, light_control)
                 elif mode == input_cmds[3]:
-                    algo = Pulses(lights_pos, light_control)
+                    algo = Pulses(lights_pos, light_control, mode_args)
                 elif mode == input_cmds[4]:
-                    algo = Pulses(lights_pos, light_control, False)
-                elif mode == input_cmds[5]:
                     dir_path = os.path.dirname(os.path.realpath(__file__))
                     algo = GifVisualizer(lights_pos, light_control,
                             f'{dir_path}/Animated_fire_by_nevit.gif', [1.0, 0.5, 0.5])
-                elif mode == input_cmds[6]:
+                elif mode == input_cmds[5]:
                     algo = Snake(lights_pos, light_control)
-                elif mode == input_cmds[7]:
+                elif mode == input_cmds[6]:
                     algo = PlaneNormal(lights_pos, light_control, mode_args)
-                elif mode == input_cmds[8]:
-                    algo = RotatingTree(lights_pos, light_control)
+                elif mode == input_cmds[7]:
+                    algo = RotatingTree(lights_pos, light_control, mode_args)
                 else:
                     if not mode == "help":
                         print(f'Unknown command {mode}')

@@ -4,7 +4,7 @@ from math import cos, sin
 
 
 class Pulses:
-    def __init__(self, lights_pos, light_control, position_based=True):
+    def __init__(self, lights_pos, light_control, position_based_center):
         self.light_control = light_control
         self.lights_pos = lights_pos
         self.pos_min = np.min(self.lights_pos, axis=0)
@@ -14,13 +14,13 @@ class Pulses:
         self.radius = 1000.0
         self.color = [0, 0, 0]
         self.step_length = 0.05
-        self.position_based = position_based
+        self.position_based_center = bool(position_based_center)
 
     def update_pulse(self):
         if self.radius > self.max_radius:
             self.radius = 0.0
             self.color = np.random.choice(range(256), size=3)
-            if self.position_based:
+            if self.position_based_center:
                 for i in range(0, 3):
                     self.center[i] = self.pos_min[i] + random() * (self.pos_max[i] - self.pos_min[i])
             else:

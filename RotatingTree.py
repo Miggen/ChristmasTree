@@ -3,7 +3,12 @@ import cv2
 from math import atan2
 
 class RotatingTree:
-    def __init__(self, lights_pos, light_control):
+    def __init__(self, lights_pos, light_control, speed_deg):
+        if not speed_deg:
+            self.speed_deg = 1.0
+        else:
+            self.speed_deg = float(speed_deg[0])
+
         self.colors = [
             (255, 0, 0),
             (0, 255, 0)]
@@ -16,7 +21,7 @@ class RotatingTree:
         self.z_delta = z_max - self.z_min
 
     def rotate(self):
-        self.start_angle += np.deg2rad(5.0)
+        self.start_angle += np.deg2rad(self.speed_deg)
         if self.start_angle >= 2.0 * np.pi:
             self.start_angle -= 2.0 * np.pi
 
