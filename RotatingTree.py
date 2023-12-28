@@ -51,10 +51,11 @@ class RotatingTree:
 
     def color_from_angle(self, angle):
         angle = self.normalize_angle(angle)
-        color_idx = (angle / (2.0 * np.pi)) * (len(self.colors) - 1)
+        color_idx = (angle / (2.0 * np.pi)) * len(self.colors)
         low_idx = int(color_idx)
+        high_idx = (low_idx + 1) % len(self.colors)
         color_1 = self.colors[low_idx]
-        color_2 = self.colors[low_idx + 1]
+        color_2 = self.colors[high_idx]
         remainder = color_idx - low_idx
         return self.interpolate_color(remainder, color_1, color_2)
 
