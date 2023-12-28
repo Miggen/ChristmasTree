@@ -43,6 +43,8 @@ def collect_samples(camera, lights, output_dir):
 
 def main():
     args = parse_arguments()
+    print('Verify that camera image is clear! Shutting down as a reminder')
+    return
     args.output_dir.mkdir(exist_ok=True)
     camera = Camera(True)
     lights = Lights.Lights()
