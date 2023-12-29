@@ -30,6 +30,7 @@ input_cmds = [
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Lights the tree in 3d patterns.')
     parser.add_argument('--data-dir', required=True, type=Path, help='Data directory')
+    parser.add_argument('--mode', required=False, type=str, help='Initial mode to run', default='rotating')
     return parser.parse_args()
 
 
@@ -46,6 +47,36 @@ def load_light_positions(args):
     return lights_3d
 
 
+def select_algo(mode, mode_args, lights_pos, light_control, prev_algo):
+    algo = prev_algo
+    if mode == input_cmds[0]:
+        algo = None
+        pass
+    elif mode == input_cmds[1]:
+        algo = RotatingPlane(lights_pos, light_control)
+    elif mode == input_cmds[2]:
+        algo = Raindrops(lights_pos, light_control)
+    elif mode == input_cmds[3]:
+        algo = Pulses(lights_pos, light_control, mode_args)
+    elif mode == input_cmds[4]:
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        algo = GifVisualizer(lights_pos, light_control,
+                f'{dir_path}/Animated_fire_by_nevit.gif', [1.0, 0.5, 0.5])
+    elif mode == input_cmds[5]:
+        algo = Snake(lights_pos, light_control)
+    elif mode == input_cmds[6]:
+        algo = PlaneNormal(lights_pos, light_control, mode_args)
+    elif mode == input_cmds[7]:
+        algo = RotatingTree(lights_pos, light_control, mode_args)
+    else:
+        if not mode == "help":
+            print(f'Unknown command {mode}')
+        print('Available commands:')
+        for cmd in input_cmds:
+            print(f'\t{cmd}')
+    return algo
+
+
 def main():
     args = parse_arguments()
     inputQueue = queue.Queue()
@@ -58,10 +89,9 @@ def main():
     lights_pos = load_light_positions(args)
     light_control = Lights.Lights()
 
-    algo = RotatingPlane(lights_pos, light_control)
+    algo = select_algo(args.mode, [], lights_pos, light_control, None)
 
-    keep_running = True
-    while keep_running:
+    while algo is not None:
         try:
             algo.step()
             light_control.update()
@@ -69,34 +99,10 @@ def main():
                 input_str = inputQueue.get().split(" ")
                 mode = input_str[0]
                 mode_args = input_str[1:]
-                if mode == input_cmds[0]:
-                    keep_running = False
-                    break
-                elif mode == input_cmds[1]:
-                    algo = RotatingPlane(lights_pos, light_control)
-                elif mode == input_cmds[2]:
-                    algo = Raindrops(lights_pos, light_control)
-                elif mode == input_cmds[3]:
-                    algo = Pulses(lights_pos, light_control, mode_args)
-                elif mode == input_cmds[4]:
-                    dir_path = os.path.dirname(os.path.realpath(__file__))
-                    algo = GifVisualizer(lights_pos, light_control,
-                            f'{dir_path}/Animated_fire_by_nevit.gif', [1.0, 0.5, 0.5])
-                elif mode == input_cmds[5]:
-                    algo = Snake(lights_pos, light_control)
-                elif mode == input_cmds[6]:
-                    algo = PlaneNormal(lights_pos, light_control, mode_args)
-                elif mode == input_cmds[7]:
-                    algo = RotatingTree(lights_pos, light_control, mode_args)
-                else:
-                    if not mode == "help":
-                        print(f'Unknown command {mode}')
-                    print('Available commands:')
-                    for cmd in input_cmds:
-                        print(f'\t{cmd}')
+                algo = select_algo(mode, mode_args, lights_pos, light_control, algo)
         except Exception as e:
             print(e)
-            keep_running = False
+            algo = None
 
 
 if __name__ == "__main__":
