@@ -21,10 +21,9 @@ class Camera:
         self.stream.release()
 
     def get(self):
-        for _ in range(0, 6):
-            status, frame = self.stream.read()
+        status, frame = self.stream.read()
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        return frame
+        return frame_rgb
 
 
 if __name__ == "__main__":
