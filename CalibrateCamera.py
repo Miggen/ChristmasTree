@@ -5,6 +5,7 @@ import Camera
 import matplotlib.pyplot as plt
 from pathlib import Path
 import cv2
+from time import sleep
 
 
 def calibrate_chessboard(images):
@@ -17,22 +18,20 @@ def calibrate_chessboard(images):
     imgpoints = []  # 2d points in image plane.
 
     # Iterate through all images
-    for image_path in images:
+    for idx, image_path in enumerate(images):
         image_name = image_path.stem
-        _, size_mm, num_cols, num_rows = image_name.split('_')
-        size_cm = int(size_mm) / 10.0
+        _, size_mm, num_cols, num_rows, _ = image_name.split('_')
         num_cols = int(num_cols)
         num_rows = int(num_rows)
         # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(8,6,0)
         objp = np.zeros((num_rows * num_cols, 3), np.float32)
         objp[:, :2] = np.mgrid[0:num_cols, 0:num_rows].T.reshape(-1, 2)
-        objp = objp * size_cm
+        objp = objp * float(size_mm) / 1000.0
         img = cv2.imread(str(image_path))
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
         # Find the chess board corners
         ret, corners = cv2.findChessboardCorners(gray, (num_cols, num_rows), None)
-:w
 
         # If found, add object points, image points (after refining them)
         if ret:
@@ -40,6 +39,9 @@ def calibrate_chessboard(images):
 
             corners_refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
             imgpoints.append(corners_refined)
+            cv2.drawChessboardCorners(gray, (num_cols, num_rows), corners_refined, ret)
+            cv2.imshow('Corners', gray)
+            cv2.waitKey(0)
 
     # Calibrate camera
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
@@ -86,14 +88,19 @@ def main():
     image_dir = calibration_dir / "Images"
     images = []
     if image_dir.exists():
-        images = list(args.image_dir.glob('*.png'))
+        images = list(image_dir.glob('*.png'))
 
     if args.capture:
-        camera = Camera.Camera()
+        camera = Camera.Camera(manual_exposure=False)
         image = camera.get()
         calibration_dir.mkdir(exist_ok=True)
         image_dir.mkdir(exist_ok=True)
-        image_path = image_dir / f"Checkerboard_{args.size_mm}_{args.num_cols}_{args.num_rows}.png"
+        image_number = 0
+        while True:
+            image_path = image_dir / f"Checkerboard_{args.size_mm}_{args.num_cols}_{args.num_rows}_{image_number}.png"
+            if not image_path.exists():
+                break
+            image_number += 1
         cv2.imwrite(image_path, image)
         images.append(image_path)
     else:
