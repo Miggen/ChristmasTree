@@ -37,6 +37,7 @@ if __name__ == "__main__":
     initial_image = camera.get()
     fig, ax = plt.subplots()
     img = ax.imshow(initial_image)
+
     def _update_image(frame):
         image = camera.get()
         img.set_array(image)
