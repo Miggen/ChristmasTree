@@ -31,6 +31,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Lights the tree in 3d patterns.')
     parser.add_argument('--data-dir', required=True, type=Path, help='Data directory')
     parser.add_argument('--mode', required=False, type=str, help='Initial mode to run', default='rotating')
+    parser.add_argument('--no-io', action='store_true', help='Disables reading of input')
     return parser.parse_args()
 
 
@@ -80,8 +81,9 @@ def select_algo(mode, mode_args, lights_pos, light_control, prev_algo):
 def main():
     args = parse_arguments()
     inputQueue = queue.Queue()
-    inputThread = threading.Thread(target=read_kbd_input, args=(inputQueue,), daemon=True)
-    inputThread.start()
+    if not args.no_io:
+        inputThread = threading.Thread(target=read_kbd_input, args=(inputQueue,), daemon=True)
+        inputThread.start()
 
     if not args.data_dir.exists():
         raise Exception('Data directory is empty')
