@@ -33,7 +33,7 @@ class Camera:
 
 
 if __name__ == "__main__":
-    camera = Camera()
+    camera = Camera(manual_exposure=True)
     initial_image = camera.get()
     fig, ax = plt.subplots()
     img = ax.imshow(initial_image)

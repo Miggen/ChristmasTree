@@ -43,10 +43,7 @@ def collect_samples(camera, lights, output_dir):
 
 def main():
     args = parse_arguments()
-    print('Verify that camera image is clear! Shutting down as a reminder')
-    return
-    args.output_dir.mkdir(exist_ok=True)
-    camera = Camera(True)
+    camera = Camera(manual_exposure=True)
     lights = Lights.Lights()
 
     sample_img_dir = args.output_dir / 'Raw_Samples'
