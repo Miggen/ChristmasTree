@@ -58,6 +58,7 @@ def main():
     image_dir.mkdir()
 
     print('Move camera to next position, press ENTER to continue or ESC to stop')
+    lights.set_all(255, 255, 255)
     while True:
         rgb = camera.get()
         display_img = cv2.resize(rgb, (800, 540))
