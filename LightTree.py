@@ -6,13 +6,13 @@ import numpy as np
 import threading
 import queue
 import os
-from RotatingPlane import RotatingPlane
-from Raindrops import Raindrops
-from Pulses import Pulses
-from GifVisualizer import GifVisualizer
-from Snake import Snake
-from PlaneNormal import PlaneNormal
-from RotatingTree import RotatingTree
+from Animations.RotatingPlane import RotatingPlane
+from Animations.Raindrops import Raindrops
+from Animations.Pulses import Pulses
+from Animations.GifVisualizer import GifVisualizer
+from Animations.Snake import Snake
+from Animations.PlaneNormal import PlaneNormal
+from Animations.RotatingTree import RotatingTree
 
 
 input_cmds = [
