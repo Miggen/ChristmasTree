@@ -15,10 +15,6 @@ from calibrateCamera import load_coefficients
 import pdb
 
 PI = 3.1415
-focal_length_x = 645.0
-focal_length_y = 634.0
-center_x = 320.0
-center_y = 240.0
 
 bad_samples = [
 ]
