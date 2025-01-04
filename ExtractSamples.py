@@ -7,6 +7,7 @@ import SampleLightPositions
 import matplotlib.pyplot as plt
 from enum import Enum
 import math
+import yaml
 
 
 class BitValue(Enum):
@@ -25,11 +26,14 @@ class BitValue(Enum):
             raise ValueError(f"'{label}' is not a valid BitValue")
 
 class Sample:
-    def __init__(self):
-        self.bits = [BitValue.NOT_SET] * SampleLightPositions.NUM_BITS_NEEDED
-        self.x_sum = 0.0
-        self.y_sum = 0.0
-        self.num_position_samples = 0
+    def __init__(self, bits=None, x_sum=0.0, y_sum=0.0, num_position_samples=0):
+        if bits == None:
+            self.bits = [BitValue.NOT_SET] * SampleLightPositions.NUM_BITS_NEEDED
+        else:
+            self.bits = bits
+        self.x_sum = x_sum
+        self.y_sum = y_sum
+        self.num_position_samples = num_position_samples
 
     def match(self, image_point):
         x, y = self.position()
@@ -63,6 +67,7 @@ class Sample:
         values = [0]
         for bit_position, bit in enumerate(self.bits):
             num_candidates = len(values)
+            values_before = values
             if bit == BitValue.ONE:
                 for i in range(num_candidates):
                     values[i] += 2**bit_position
@@ -74,6 +79,7 @@ class Sample:
             elif bit == BitValue.NOT_SET:
                 values = []
                 break
+
         return values
 
 
@@ -87,7 +93,7 @@ class Sample:
         return f"{x}, {y}: {ind} {bit_string}"
 
     def __repr__(self):
-        return self.__str__()
+        return f"Sample(bits={self.bits!r}, x_sum={self.x_sum!r} y_sum={self.y_sum!r}, num_position_samples={self.num_position_samples!r})"
 
 
 def parse_arguments():
@@ -180,9 +186,33 @@ def draw_samples(output_dir, samples, images):
         idx = sample.index()
         if len(idx) == 1:
             idx = idx[0]
-        cv2.putText(image, str(idx), (int(x) - 10, int(y) + 5), font, 0.25, (255, 0, 0), 2, cv2.LINE_AA)
+        cv2.putText(image, str(idx), (int(x) - 10, int(y) + 5), font, 0.5, (255, 0, 0), 2, cv2.LINE_AA)
 
     cv2.imwrite(output_dir / "samples.png", image)
+
+
+def save_data(output_dir, samples):
+    with open(output_dir / "sample.pkl", 'wb') as file:
+        pickle.dump(samples, file)
+
+
+def load_data(samples_dir):
+    data = dict()
+    for sample_dir in samples_dir.iterdir():
+        sample_file = sample_dir / "sample.pkl"
+        if sample_file.exists():
+            with open(sample_file, 'rb') as file:
+                camera_position, sample_data = pickle.load(file)
+                data[sample_dir.stem] = (camera_position, sample_data)
+
+    return data
+
+def get_camera_position(sample_dir):
+    camera_position_path = sample_dir / "camera_position.yaml"
+    with open(camera_position_path, 'r') as file:
+        camera_position = yaml.safe_load(file)
+
+    return camera_position
 
 
 def main():
@@ -209,6 +239,8 @@ def main():
         light_samples = match_bright_points(images_points)
         samples = filter_samples(light_samples)
         draw_samples(debug_dir, samples, images)
+        camera_position = get_camera_position(sample_dir)
+        save_data(sample_dir, (camera_position, samples))
 
 
 if __name__ == "__main__":

@@ -58,10 +58,12 @@ def save_coefficients(mtx, dist, path):
     cv_file.release()
 
 
-def load_coefficients(path):
+def load_coefficients(data_dir):
     '''Loads camera matrix and distortion coefficients.'''
+    calibration_dir = data_dir / "Calibration"
+    calibration_file = calibration_dir / "calibration.yml"
     # FILE_STORAGE_READ
-    cv_file = cv2.FileStorage(path, cv2.FILE_STORAGE_READ)
+    cv_file = cv2.FileStorage(calibration_file, cv2.FILE_STORAGE_READ)
 
     # note we also have to specify the type to retrieve other wise we only get a
     # FileNode object back instead of a matrix
