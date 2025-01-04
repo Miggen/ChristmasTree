@@ -7,6 +7,9 @@ from pathlib import Path
 from math import log, ceil
 
 
+NUM_BITS_NEEDED = ceil(log(Lights.NUM_LIGHTS) / log(2))
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Collect images to calibrate 3D positions of christmas lights.')
     parser.add_argument('--output-dir', required=True, type=Path, help='Output directory')
@@ -27,8 +30,7 @@ def collect_samples(camera, lights, output_dir):
     lights.set_all(255, 255, 255)
     save_image(camera, output_dir, f"Sample_all.png")
 
-    num_bits_needed = ceil(log(Lights.NUM_LIGHTS) / log(2))
-    for bit in range(0, num_bits_needed):
+    for bit in range(0, NUM_BITS_NEEDED):
         for bit_value in range(0, 2):
             for light_idx in range(0, Lights.NUM_LIGHTS):
                 is_bit_set = ((light_idx >> bit) & 1) == bit_value
@@ -43,10 +45,7 @@ def collect_samples(camera, lights, output_dir):
 
 def main():
     args = parse_arguments()
-    print('Verify that camera image is clear! Shutting down as a reminder')
-    return
-    args.output_dir.mkdir(exist_ok=True)
-    camera = Camera(True)
+    camera = Camera(manual_exposure=True)
     lights = Lights.Lights()
 
     sample_img_dir = args.output_dir / 'Raw_Samples'
@@ -61,6 +60,7 @@ def main():
     image_dir.mkdir()
 
     print('Move camera to next position, press ENTER to continue or ESC to stop')
+    lights.set_all(255, 255, 255)
     while True:
         rgb = camera.get()
         display_img = cv2.resize(rgb, (800, 540))

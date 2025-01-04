@@ -10,21 +10,15 @@ from scipy.sparse import lil_matrix
 import matplotlib.pyplot as plt
 import time
 from scipy.optimize import least_squares
-from calibrateCamera import load_coefficients
+from CalibrateCamera import load_coefficients
+from ExtractSamples import load_data, Sample, BitValue
 
 import pdb
 
 PI = 3.1415
-focal_length_x = 645.0
-focal_length_y = 634.0
-center_x = 320.0
-center_y = 240.0
-
-bad_samples = [
-]
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Estimate the 3D positions of the Camera and Lights using samples from Calibration.py.')
+    parser = argparse.ArgumentParser(description='Estimate the 3D positions of the Camera and Lights using samples from ExtractSamples.py.')
     parser.add_argument('--data-dir', required=True, type=Path, help='Data directory')
     return parser.parse_args()
 
@@ -49,22 +43,26 @@ def rotation_matrix_from_euler(roll, pitch, yaw):
 
     return R
 
-def initialize(args):
-    data_files = sorted(glob(f'{str(args.data_dir)}/sample_dmp_*.pkl'))
-    n_cameras = len(data_files)
+def initialize(data_dir):
+    samples_dir = data_dir / "Raw_Samples"
+    samples_data = load_data(samples_dir)
+    n_cameras = len(samples_data)
     n_points = Lights.NUM_LIGHTS
 
+    camera_positions = dict()
     samples = []
-    num_sample_sources = 0
-    for sample_file_path in data_files:
-        with open(sample_file_path, 'rb') as sample_file:
-            cam_samples = pickle.load(sample_file)
-            for light_idx, cam_idx, px in cam_samples:
-                if not (light_idx, cam_idx) in bad_samples:
-                    samples.append((light_idx, num_sample_sources, cam_idx, px))
-        num_sample_sources += 1
+    for cam_idx, sample_name in enumerate(samples_data.keys()):
+        camera_position, frame_samples = samples_data[sample_name]
+        camera_positions[cam_idx] = camera_position
+        for sample in frame_samples:
+            x, y = sample.position()
+            light_indices = sample.index()
+            for light_idx in light_indices:
+                # Any idx above number of target lights is incorrect
+                if light_idx < Lights.NUM_LIGHTS:
+                    samples.append((cam_idx, light_idx, x, y))
 
-    camera_matrix, distortion_coeff = load_coefficients(f'{str(args.data_dir)}/calibration.yaml')
+    camera_matrix, distortion_coeff = load_coefficients(data_dir)
     fx = camera_matrix[0, 0]
     fy = camera_matrix[1, 1]
     cx = camera_matrix[0, 2]
@@ -76,33 +74,31 @@ def initialize(args):
     normalized_raw = np.empty((n_observations, 2), dtype=float)
 
     for i, sample in enumerate(samples):
-        camera_indices[i] = sample[1]
-        point_indices[i] = sample[0]
-        x = (float(sample[3][0]) - cx) / fx
-        y = (float(sample[3][1]) - cy) / fy
+        cam_idx, light_idx, x_raw, y_raw = sample
+        camera_indices[i] = cam_idx
+        point_indices[i] = light_idx
+        x = (float(x_raw) - cx) / fx
+        y = (float(y_raw) - cy) / fy
         normalized_raw[i] = [x, y]
     #normalized_warped = cv2.undistortPoints(normalized_raw, camera_matrix, distortion_coeff).reshape(-1, 2)
 
-    camera_in_origin = [
-        [0.1, -3., -1.0],
-        [-2.0, 2.1, -1.0],
-        [-3.1, 0.1, -2.0],
-        [-1.0, 3.0, -2.1],
-        [3.0, 3.1, -0.1],
-        [2.0, -0.1, -2.0],
-    ]
 
     camera_pos = np.empty((n_cameras, 6), dtype=float)
-    for i in range(n_cameras):
-        x, y, z = camera_in_origin[i]
+    for cam_idx in range(n_cameras):
+        position = camera_positions[cam_idx]
+        x = position['position']['x']
+        y = position['position']['y']
+        z = position['position']['z']
+        target_rotation_deg = position['orientation']['yaw']
+        target_rotation = np.deg2rad(target_rotation_deg)
         roll = 0.0
         pitch = 0.0
-        yaw = PI + atan2(y, x)
+        yaw = PI + atan2(y, x) + target_rotation
         R = rotation_matrix_from_euler(-roll, -pitch, -yaw)
         rodrigues = cv2.Rodrigues(R)
 
-        camera_pos[i, :3] = rodrigues[0].reshape(3)
-        camera_pos[i, 3:] = -R @ camera_in_origin[i]
+        camera_pos[cam_idx, :3] = rodrigues[0].reshape(3)
+        camera_pos[cam_idx, 3:] = -R @ [x, y, z]
 
     points_3d = np.zeros((n_points, 3), dtype=float)
 
@@ -208,7 +204,7 @@ def main():
     if not args.data_dir.exists():
         raise Exception('Data directory is empty')
 
-    camera_pos, points_3d, camera_indices, point_indices, normalized_warped = initialize(args)
+    camera_pos, points_3d, camera_indices, point_indices, normalized_warped = initialize(args.data_dir)
     if len(normalized_warped) == 0:
         raise Exception('No samples found')
     n_cameras = camera_pos.shape[0]
