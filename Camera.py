@@ -57,7 +57,7 @@ class Camera:
         # Loop to clear the internal buffer so we get the *current* reality
         for _ in range(5):
             status, frame = self.stream.read()
-        
+
         if status:
             return frame
         return None

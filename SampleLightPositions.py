@@ -18,7 +18,7 @@ def parse_arguments():
 
 def save_image(camera, output_dir, filename):
     sleep(1.0)
-    rgb = camera.get()
+    rgb = camera.get_rgb()
     sample_file = output_dir / filename
     cv2.imwrite(str(sample_file), rgb)
 
@@ -62,7 +62,7 @@ def main():
     print('Move camera to next position, press ENTER to continue or ESC to stop')
     lights.set_all(255, 255, 255)
     while True:
-        rgb = camera.get()
+        rgb = camera.get_rgb()
         display_img = cv2.resize(rgb, (800, 540))
         cv2.imshow("preview", display_img)
         key = cv2.waitKey(20)
