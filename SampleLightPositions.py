@@ -5,6 +5,7 @@ import Lights
 from time import sleep
 from pathlib import Path
 from math import log, ceil
+import yaml
 
 
 NUM_BITS_NEEDED = ceil(log(Lights.NUM_LIGHTS) / log(2))
@@ -13,6 +14,12 @@ NUM_BITS_NEEDED = ceil(log(Lights.NUM_LIGHTS) / log(2))
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Collect images to calibrate 3D positions of christmas lights.')
     parser.add_argument('--output-dir', required=True, type=Path, help='Output directory')
+    parser.add_argument('--x', required=True, type=float, help='Camera position x')
+    parser.add_argument('--y', required=True, type=float, help='Camera position y')
+    parser.add_argument('--z', required=True, type=float, help='Camera position z')
+    parser.add_argument('--roll', required=True, type=float, help='Camera rotation roll')
+    parser.add_argument('--pitch', required=True, type=float, help='Camera rotation pitch')
+    parser.add_argument('--yaw', required=True, type=float, help='Camera rotation yaw')
     return parser.parse_args()
 
 
@@ -41,6 +48,23 @@ def collect_samples(camera, lights, output_dir):
 
             lights.update()
             save_image(camera, output_dir, f"Sample_bit_{bit}_{bit_value}.png")
+
+
+def save_camera_position(args, output_dir: Path):
+    camera_position = {
+        "position": {
+            "x": args.x,
+            "y": args.y,
+            "z": args.z,
+        },
+        "orientation": {
+            "roll": args.roll,
+            "pitch": args.pitch,
+            "yaw": args.yaw,
+        }
+    }
+    with open(output_dir / 'camera_position.yaml', 'w') as file:
+        yaml.dump(camera_position, file, default_flow_style=False, sort_keys=False)
 
 
 def main():
@@ -72,6 +96,7 @@ def main():
             break
 
     collect_samples(camera, lights, image_dir)
+    save_camera_position(args, image_dir)
 
 
 if __name__ == "__main__":

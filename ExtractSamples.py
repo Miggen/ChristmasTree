@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from enum import Enum
 import math
 import yaml
+import numpy as np
 
 
 class BitValue(Enum):
@@ -37,15 +38,13 @@ class Sample:
 
     def match(self, image_point):
         x, y = self.position()
-        point_x, point_y, _ = image_point
-        distance = math.sqrt((x - point_x)**2 + (y - point_y)**2)
+        distance = math.sqrt((x - image_point["x"])**2 + (y - image_point["y"])**2)
         threshold = 2.0
         return distance < threshold
 
     def update(self, image_point, bit, bit_value: BitValue):
-        point_x, point_y, _ = image_point
-        self.x_sum += point_x
-        self.y_sum += point_y
+        self.x_sum += image_point["x"]
+        self.y_sum += image_point["y"]
         self.num_position_samples += 1
 
         if self.bits[bit] == BitValue.NOT_SET:
@@ -67,7 +66,6 @@ class Sample:
         values = [0]
         for bit_position, bit in enumerate(self.bits):
             num_candidates = len(values)
-            values_before = values
             if bit == BitValue.ONE:
                 for i in range(num_candidates):
                     values[i] += 2**bit_position
@@ -104,38 +102,37 @@ def parse_arguments():
 
 def identify_bright_dots(image):
     bright_dots = []
-    _, thresholded = cv2.threshold(image, 64, 255, cv2.THRESH_BINARY)
+
+    _, thresholded = cv2.threshold(image, 200, 255, cv2.THRESH_BINARY)
+
     contours, _ = cv2.findContours(thresholded, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
     for contour in contours:
-        # Calculate moments of the contour
         M = cv2.moments(contour)
-        if M["m00"] != 0:
-            # Calculate the centroid (center) of the contour
+        if M["m00"] > 0:
+            # Calculate the centroid (center)
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
-            intensity = image[cY, cX]
-            bright_dots.append((cX, cY, intensity))
+
+            mask = np.zeros(image.shape, dtype="uint8")
+            cv2.drawContours(mask, [contour], -1, 255, -1)
+            mean_val = cv2.mean(image, mask=mask)[0]
+
+            bright_dots.append({
+                "x": cX, 
+                "y": cY, 
+                "intensity": round(mean_val, 2),
+                "size": cv2.contourArea(contour)
+            })
+
     return bright_dots
-
-
-def save_debug_img(rgb, maxLoc, maxVal, idx, camera_idx, args, debug_img_dir):
-    cv2.circle(rgb, maxLoc, 5, (255, 0, 0), 2)
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    cv2.putText(rgb, f'{maxVal}',(10, 50), font, 2, (255, 255, 255), 2, cv2.LINE_AA)
-
-    debug_img = str(debug_img_dir / f'Debug_{idx:04d}_{camera_idx:03d}.png')
-    cv2.imwrite(debug_img, rgb)
-
-    if args.visualize:
-        cv2.imshow("preview", rgb)
-        cv2.waitKey(1000)
 
 
 def remove_background(image, background):
     return cv2.subtract(image, background)
 
 
-def extract_bright_points(images):
+def extract_bright_points(images, debug_dir: Path):
     bright_points = dict()
     background_rgb = cv2.imread(images["background"])
     background = cv2.cvtColor(background_rgb, cv2.COLOR_RGB2GRAY)
@@ -144,8 +141,17 @@ def extract_bright_points(images):
             image_rgb = cv2.imread(image_path)
             image = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2GRAY)
             image = remove_background(image, background)
+            cv2.imwrite(debug_dir / f"{image_name}_removed_background.png", image)
             bright_dots = identify_bright_dots(image)
             bright_points[image_name] = bright_dots
+
+            for dot in bright_dots:
+                area = dot["size"]
+                radius = np.sqrt(area / np.pi)
+                cv2.circle(image_rgb, (int(dot["x"]), int(dot["y"])), int(radius), (255, 0, 0), 1)
+
+            cv2.imwrite(debug_dir / f"{image_name}_bright_points.png", image_rgb)
+
     return bright_points
 
 
@@ -235,7 +241,7 @@ def main():
         debug_dir = sample_dir / "debug"
         debug_dir.mkdir(exist_ok=True)
 
-        images_points = extract_bright_points(images)
+        images_points = extract_bright_points(images, debug_dir)
         light_samples = match_bright_points(images_points)
         samples = filter_samples(light_samples)
         draw_samples(debug_dir, samples, images)
