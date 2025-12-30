@@ -2,7 +2,6 @@ import argparse
 import pickle
 import cv2
 from pathlib import Path
-from glob import glob
 import Lights
 import numpy as np
 from math import cos, sin, atan2
@@ -13,9 +12,6 @@ from scipy.optimize import least_squares
 from CalibrateCamera import load_coefficients
 from ExtractSamples import load_data, Sample, BitValue
 
-import pdb
-
-PI = 3.1415
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Estimate the 3D positions of the Camera and Lights using samples from ExtractSamples.py.')
@@ -93,7 +89,7 @@ def initialize(data_dir):
         target_rotation = np.deg2rad(target_rotation_deg)
         roll = 0.0
         pitch = 0.0
-        yaw = PI + atan2(y, x) + target_rotation
+        yaw = np.pi + atan2(y, x) + target_rotation
         R = rotation_matrix_from_euler(-roll, -pitch, -yaw)
         rodrigues = cv2.Rodrigues(R)
 
@@ -223,6 +219,7 @@ def main():
         pickle.dump((n_cameras, n_points, camera_indices, point_indices, normalized_warped), dmp_file, pickle.HIGHEST_PROTOCOL)
 
     rotated_points = get_points(res.x, n_cameras, n_points)
+    #visualize(res.x, n_cameras, n_points)
     with open(args.data_dir / f'solution.pkl', 'wb') as dmp_file:
         pickle.dump(rotated_points, dmp_file, pickle.HIGHEST_PROTOCOL)
 

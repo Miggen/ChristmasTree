@@ -61,7 +61,7 @@ def save_coefficients(mtx, dist, path):
 def load_coefficients(data_dir):
     '''Loads camera matrix and distortion coefficients.'''
     calibration_dir = data_dir / "Calibration"
-    calibration_file = calibration_dir / "calibration.yml"
+    calibration_file = calibration_dir / "calibration.yaml"
     # FILE_STORAGE_READ
     cv_file = cv2.FileStorage(calibration_file, cv2.FILE_STORAGE_READ)
 
@@ -94,7 +94,7 @@ def main():
 
     if args.capture:
         camera = Camera.Camera(manual_exposure=False)
-        image = camera.get()
+        image = camera.get_rgb()
         calibration_dir.mkdir(exist_ok=True)
         image_dir.mkdir(exist_ok=True)
         image_number = 0
@@ -107,7 +107,7 @@ def main():
         images.append(image_path)
     else:
         ret, mtx, dist, rvecs, tvecs = calibrate_chessboard(images)
-        save_coefficients(mtx, dist, calibration_dir / "calibration.yml")
+        save_coefficients(mtx, dist, calibration_dir / "calibration.yaml")
 
 
 if __name__ == "__main__":

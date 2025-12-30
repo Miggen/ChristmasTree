@@ -14,12 +14,9 @@ NUM_BITS_NEEDED = ceil(log(Lights.NUM_LIGHTS) / log(2))
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Collect images to calibrate 3D positions of christmas lights.')
     parser.add_argument('--output-dir', required=True, type=Path, help='Output directory')
-    parser.add_argument('--x', required=True, type=float, help='Camera position x')
-    parser.add_argument('--y', required=True, type=float, help='Camera position y')
-    parser.add_argument('--z', required=True, type=float, help='Camera position z')
-    parser.add_argument('--roll', required=True, type=float, help='Camera rotation roll')
-    parser.add_argument('--pitch', required=True, type=float, help='Camera rotation pitch')
-    parser.add_argument('--yaw', required=True, type=float, help='Camera rotation yaw')
+    parser.add_argument('--x', required=True, type=float, help='Camera position x [m]')
+    parser.add_argument('--y', required=True, type=float, help='Camera position y [m]')
+    parser.add_argument('--z', required=True, type=float, help='Camera position z [m]')
     return parser.parse_args()
 
 
@@ -58,9 +55,9 @@ def save_camera_position(args, output_dir: Path):
             "z": args.z,
         },
         "orientation": {
-            "roll": args.roll,
-            "pitch": args.pitch,
-            "yaw": args.yaw,
+            "roll": 0.0,
+            "pitch": 0.0,
+            "yaw": 0.0,
         }
     }
     with open(output_dir / 'camera_position.yaml', 'w') as file:
@@ -69,7 +66,6 @@ def save_camera_position(args, output_dir: Path):
 
 def main():
     args = parse_arguments()
-    camera = Camera(manual_exposure=True)
     lights = Lights.Lights()
 
     sample_img_dir = args.output_dir / 'Raw_Samples'
@@ -85,6 +81,7 @@ def main():
 
     print('Move camera to next position, press ENTER to continue or ESC to stop')
     lights.set_all(255, 255, 255)
+    camera = Camera(manual_exposure=True)
     while True:
         rgb = camera.get_rgb()
         display_img = cv2.resize(rgb, (800, 540))

@@ -13,6 +13,7 @@ from Animations.GifVisualizer import GifVisualizer
 from Animations.Snake import Snake
 from Animations.PlaneNormal import PlaneNormal
 from Animations.RotatingTree import RotatingTree
+import time
 
 
 input_cmds = [
@@ -93,10 +94,17 @@ def main():
 
     algo = select_algo(args.mode, [], lights_pos, light_control, None)
 
+    update_time = 0.1
     while algo is not None:
+        start_time = time.perf_counter()
         try:
             algo.step()
             light_control.update()
+            elapsed_time = time.perf_counter() - start_time
+            wait_time = update_time - elapsed_time
+            if wait_time > 0:
+                time.sleep(wait_time)
+
             if inputQueue.qsize() > 0:
                 input_str = inputQueue.get().split(" ")
                 mode = input_str[0]
@@ -105,6 +113,7 @@ def main():
         except Exception as e:
             print(e)
             algo = None
+
 
 
 if __name__ == "__main__":
